@@ -1,4 +1,4 @@
-import { Outlet, useNavigate } from 'react-router-dom';
+import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 
 export function AuthenticatedLayout() {
@@ -15,7 +15,15 @@ export function AuthenticatedLayout() {
   return (
     <div className="app-shell">
       <header className="app-header">
-        <span className="app-name">AutoSDLC</span>
+        <div className="app-header-left">
+          <span className="app-name">AutoSDLC</span>
+          <nav className="app-nav">
+            <NavLink to="/" end>
+              Dashboard
+            </NavLink>
+            <NavLink to="/projects">Projects</NavLink>
+          </nav>
+        </div>
         <div className="app-header-user">
           <span>{displayName}</span>
           <button type="button" onClick={handleLogout}>

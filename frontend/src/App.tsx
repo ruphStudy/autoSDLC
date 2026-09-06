@@ -4,6 +4,10 @@ import { AuthenticatedLayout } from './components/AuthenticatedLayout';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { DashboardPage } from './pages/DashboardPage';
+import { ProjectsListPage } from './pages/ProjectsListPage';
+import { CreateProjectPage } from './pages/CreateProjectPage';
+import { ProjectDetailPage } from './pages/ProjectDetailPage';
+import { EditProjectPage } from './pages/EditProjectPage';
 
 export function App() {
   return (
@@ -19,6 +23,10 @@ export function App() {
         }
       >
         <Route index element={<DashboardPage />} />
+        <Route path="projects" element={<ProjectsListPage />} />
+        <Route path="projects/new" element={<CreateProjectPage />} />
+        <Route path="projects/:id" element={<ProjectDetailPage />} />
+        <Route path="projects/:id/edit" element={<EditProjectPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

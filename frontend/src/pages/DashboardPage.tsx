@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 
 export function DashboardPage() {
@@ -7,7 +8,9 @@ export function DashboardPage() {
     <div>
       <h1>Dashboard</h1>
       <p>Welcome, {user?.firstName ?? user?.email}.</p>
-      <p>Project management tools will appear here in a future sprint.</p>
+      <p>
+        Head to <Link to="/projects">Projects</Link> to create and manage your projects.
+      </p>
     </div>
   );
 }
