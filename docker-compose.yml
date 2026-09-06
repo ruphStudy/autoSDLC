@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: autosdlc_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: autosdlc
+      POSTGRES_PASSWORD: autosdlc
+      POSTGRES_DB: autosdlc
+    ports:
+      - '5434:5432'
+    volumes:
+      - autosdlc_postgres_data:/var/lib/postgresql/data
+
+volumes:
+  autosdlc_postgres_data:
