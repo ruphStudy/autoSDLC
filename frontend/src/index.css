@@ -535,6 +535,16 @@ code {
   cursor: not-allowed;
 }
 
+.stage-nav-link {
+  padding: 8px 14px;
+  border: 1px solid var(--accent-border);
+  border-radius: 6px;
+  background: var(--accent-bg);
+  color: var(--accent);
+  text-decoration: none;
+  font-size: 14px;
+}
+
 @media (max-width: 640px) {
   .page-header,
   .project-detail-header {
@@ -543,5 +553,225 @@ code {
 
   .app-header-left {
     gap: 16px;
+  }
+}
+
+/* Project analysis */
+
+.analysis-page {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.analyzing-state {
+  padding: 32px 24px;
+  text-align: center;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  color: var(--text);
+}
+
+.analysis-content {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  margin-top: 16px;
+}
+
+.analysis-section h3 {
+  font-size: 15px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text);
+  margin: 0 0 10px;
+}
+
+.analysis-section--highlight {
+  padding: 16px;
+  border: 1px solid var(--accent-border);
+  border-radius: 8px;
+  background: var(--accent-bg);
+}
+
+.analysis-empty-section {
+  color: var(--text);
+  font-size: 14px;
+}
+
+.analysis-card-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.analysis-card {
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.analysis-card p {
+  margin: 6px 0 0;
+  color: var(--text);
+}
+
+.analysis-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.analysis-card-header strong {
+  color: var(--text-h);
+}
+
+.analysis-card-meta {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.analysis-tag-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.analysis-tag-list li {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--code-bg);
+  font-size: 12px;
+  color: var(--text);
+}
+
+.analysis-metadata {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.analysis-metadata summary {
+  cursor: pointer;
+}
+
+.analysis-metadata dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 12px;
+  margin: 10px 0 0;
+}
+
+.analysis-metadata dt {
+  color: var(--text);
+}
+
+.analysis-metadata dd {
+  margin: 0;
+  color: var(--text-h);
+}
+
+.analysis-version-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+}
+
+/* Analysis edit form */
+
+.form-page--wide {
+  max-width: 820px;
+}
+
+.analysis-edit-section {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 16px 16px;
+  margin: 0 0 16px;
+}
+
+.analysis-edit-section legend {
+  padding: 0 6px;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text);
+}
+
+.analysis-edit-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.analysis-edit-row-fields {
+  flex: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.analysis-edit-row-fields input,
+.analysis-edit-row-fields select {
+  font: inherit;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text-h);
+  flex: 1;
+  min-width: 140px;
+}
+
+.analysis-edit-row button.secondary {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: none;
+  color: var(--text-h);
+  font: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.analysis-inline-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  color: var(--text-h);
+  flex: none;
+}
+
+.analysis-edit-section > button.secondary {
+  padding: 8px 14px;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  background: none;
+  color: var(--text-h);
+  font: inherit;
+  cursor: pointer;
+}
+
+@media (max-width: 640px) {
+  .analysis-edit-row {
+    flex-direction: column;
+  }
+
+  .analysis-edit-row-fields input,
+  .analysis-edit-row-fields select {
+    min-width: 0;
+    width: 100%;
   }
 }

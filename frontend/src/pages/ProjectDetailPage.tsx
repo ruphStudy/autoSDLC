@@ -4,7 +4,7 @@ import { projectsApi } from '../api/projects.api';
 import { StatusBadge } from '../projects/StatusBadge';
 import type { Project } from '../projects/types';
 
-const FUTURE_STAGES = ['Analysis', 'Architecture', 'Sprint Plan', 'Development'];
+const FUTURE_STAGES = ['Architecture', 'Sprint Plan', 'Development'];
 
 function formatDateTime(iso: string): string {
   return new Date(iso).toLocaleString(undefined, {
@@ -152,6 +152,9 @@ export function ProjectDetailPage() {
       <section className="future-stages">
         <h3>Workflow</h3>
         <div className="stage-nav">
+          <Link to={`/projects/${project.id}/analysis`} className="stage-nav-link">
+            Analysis
+          </Link>
           {FUTURE_STAGES.map((stage) => (
             <button key={stage} type="button" disabled title="Coming in a future sprint">
               {stage}

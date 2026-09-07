@@ -28,6 +28,11 @@ model User {
   @@map("users")
 }
 
+enum AnalysisSource {
+  AI_GENERATED
+  USER_EDITED
+}
+
 enum RepositoryType {
   NEW
   EXISTING
@@ -51,20 +56,66 @@ enum ProjectStatus {
 // architecture, sprint planning, execution) hang their own models off this
 // via `projectId` rather than growing this table with their JSON output.
 model Project {
-  id             String         @id @default(uuid())
+  id             String            @id @default(uuid())
   userId         String
-  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user           User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   name           String
   description    String?
   brief          String
   preferredStack String?
-  repositoryType RepositoryType @default(NEW)
+  repositoryType RepositoryType    @default(NEW)
   repositoryUrl  String?
-  status         ProjectStatus  @default(DRAFT)
+  status         ProjectStatus     @default(DRAFT)
   archivedAt     DateTime?
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  analyses       ProjectAnalysis[]
 
   @@index([userId, archivedAt])
   @@map("projects")
+}
+
+// Structured, versioned output of the Project Analysis Engine. Deliberately
+// not columns on Project: analysis is regenerable business state produced by
+// PlanningAIProvider, not a property of the project itself. Each row is a
+// full immutable snapshot (never mutated in place) — "current" is simply
+// the highest `version` for a project.
+model ProjectAnalysis {
+  id        String  @id @default(uuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  version        Int
+  source         AnalysisSource
+  basedOnVersion Int?
+
+  summary                   String
+  targetUsers               Json
+  goals                     Json
+  features                  Json
+  functionalRequirements    Json
+  nonFunctionalRequirements Json
+  assumptions               Json
+  risks                     Json
+  unresolvedQuestions       Json
+  integrations              Json
+
+  // Null on USER_EDITED versions — no AI call produced them.
+  promptName        String?
+  promptVersion     String?
+  provider          String?
+  model             String?
+  inputTokens       Int?
+  outputTokens      Int?
+  totalTokens       Int?
+  latencyMs         Int?
+  attempts          Int?
+  providerRequestId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([projectId, version])
+  @@index([projectId, createdAt])
+  @@map("project_analyses")
 }
