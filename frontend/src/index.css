@@ -775,3 +775,46 @@ code {
     width: 100%;
   }
 }
+
+/* Architecture-specific display */
+
+.arch-fact-list {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 12px;
+  margin: 8px 0 0;
+  font-size: 14px;
+}
+
+.arch-fact-list dt {
+  color: var(--text);
+}
+
+.arch-fact-list dd {
+  margin: 0;
+  color: var(--text-h);
+}
+
+.adr-card {
+  padding: 14px 18px;
+  border: 1px solid var(--accent-border);
+  border-radius: 8px;
+  background: var(--accent-bg);
+}
+
+.adr-card summary {
+  cursor: pointer;
+  color: var(--text);
+  font-size: 13px;
+  margin-top: 8px;
+}
+
+.traceability-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.traceability-arrow {
+  color: var(--text);
+}

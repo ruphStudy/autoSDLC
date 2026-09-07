@@ -11,6 +11,9 @@ import { EditProjectPage } from './pages/EditProjectPage';
 import { ProjectAnalysisPage } from './pages/ProjectAnalysisPage';
 import { EditProjectAnalysisPage } from './pages/EditProjectAnalysisPage';
 import { ProjectAnalysisVersionPage } from './pages/ProjectAnalysisVersionPage';
+import { ArchitecturePage } from './pages/ArchitecturePage';
+import { EditArchitecturePage } from './pages/EditArchitecturePage';
+import { ArchitectureVersionPage } from './pages/ArchitectureVersionPage';
 
 export function App() {
   return (
@@ -35,6 +38,12 @@ export function App() {
         <Route
           path="projects/:id/analysis/versions/:version"
           element={<ProjectAnalysisVersionPage />}
+        />
+        <Route path="projects/:id/architecture" element={<ArchitecturePage />} />
+        <Route path="projects/:id/architecture/edit" element={<EditArchitecturePage />} />
+        <Route
+          path="projects/:id/architecture/versions/:version"
+          element={<ArchitectureVersionPage />}
         />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

@@ -28,6 +28,9 @@ model User {
   @@map("users")
 }
 
+// Generic provenance for any versioned AI-generated domain entity (not
+// analysis-specific despite the name) — reused by Architecture below rather
+// than adding an identical duplicate enum.
 enum AnalysisSource {
   AI_GENERATED
   USER_EDITED
@@ -70,6 +73,7 @@ model Project {
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
   analyses       ProjectAnalysis[]
+  architectures  Architecture[]
 
   @@index([userId, archivedAt])
   @@map("projects")
@@ -81,9 +85,10 @@ model Project {
 // full immutable snapshot (never mutated in place) — "current" is simply
 // the highest `version` for a project.
 model ProjectAnalysis {
-  id        String  @id @default(uuid())
-  projectId String
-  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  id            String         @id @default(uuid())
+  projectId     String
+  project       Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  architectures Architecture[]
 
   version        Int
   source         AnalysisSource
@@ -118,4 +123,64 @@ model ProjectAnalysis {
   @@unique([projectId, version])
   @@index([projectId, createdAt])
   @@map("project_analyses")
+}
+
+// Structured, versioned technical design produced from a specific
+// ProjectAnalysis version. ProjectAnalysis describes WHAT must be built;
+// Architecture describes HOW — kept as its own entity (not a field on either
+// Project or ProjectAnalysis) for the same reason ProjectAnalysis is its own
+// entity: it is regenerable, versioned business output, not a property of
+// its parent.
+model Architecture {
+  id        String  @id @default(uuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  // Exactly which analysis version this architecture was built from —
+  // survives later ProjectAnalysis regeneration/edits so historical
+  // architecture always shows its true lineage instead of a version number
+  // that could later become ambiguous.
+  projectAnalysisId String
+  projectAnalysis   ProjectAnalysis @relation(fields: [projectAnalysisId], references: [id], onDelete: Cascade)
+
+  version        Int
+  source         AnalysisSource
+  basedOnVersion Int?
+
+  summary                    String
+  frontendArchitecture       Json
+  backendArchitecture        Json
+  apiArchitecture            Json
+  databaseArchitecture       Json
+  authenticationArchitecture Json
+  integrationArchitecture    Json
+  infrastructureArchitecture Json
+  deploymentArchitecture     Json
+  securityArchitecture       Json
+  testingStrategy            Json
+  nonFunctionalDecisions     Json
+  architectureDecisions      Json
+  requirementTraceability    Json
+  unresolvedQuestions        Json
+  constraints                Json
+
+  // Null on USER_EDITED versions — no AI call produced them.
+  promptName        String?
+  promptVersion     String?
+  provider          String?
+  model             String?
+  inputTokens       Int?
+  outputTokens      Int?
+  totalTokens       Int?
+  latencyMs         Int?
+  attempts          Int?
+  providerRequestId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([projectId, version])
+  @@index([projectId, createdAt])
+  @@index([projectAnalysisId])
+  @@map("architectures")
 }

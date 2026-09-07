@@ -7,6 +7,7 @@ import { AuthModule } from './auth/auth.module';
 import { ProjectsModule } from './projects/projects.module';
 import { PlanningAIModule } from './ai/planning/planning-ai.module';
 import { ProjectAnalysisModule } from './project-analysis/project-analysis.module';
+import { ArchitectureModule } from './architecture/architecture.module';
 import { envValidationSchema } from './config/env.validation';
 
 @Module({
@@ -20,6 +21,7 @@ import { envValidationSchema } from './config/env.validation';
     ProjectsModule,
     PlanningAIModule,
     ProjectAnalysisModule,
+    ArchitectureModule,
   ],
   controllers: [AppController],
   providers: [AppService],
