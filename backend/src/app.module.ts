@@ -8,6 +8,7 @@ import { ProjectsModule } from './projects/projects.module';
 import { PlanningAIModule } from './ai/planning/planning-ai.module';
 import { ProjectAnalysisModule } from './project-analysis/project-analysis.module';
 import { ArchitectureModule } from './architecture/architecture.module';
+import { SprintPlanningModule } from './sprint-planning/sprint-planning.module';
 import { envValidationSchema } from './config/env.validation';
 
 @Module({
@@ -22,6 +23,7 @@ import { envValidationSchema } from './config/env.validation';
     PlanningAIModule,
     ProjectAnalysisModule,
     ArchitectureModule,
+    SprintPlanningModule,
   ],
   controllers: [AppController],
   providers: [AppService],

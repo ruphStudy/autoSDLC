@@ -55,6 +55,28 @@ enum ProjectStatus {
   PAUSED
 }
 
+// Planning-time statuses only. Sprint 12+ (execution orchestration) is what
+// actually moves these away from PENDING — Sprint 6 never sets anything but
+// the initial value.
+enum SprintStatus {
+  PENDING
+  RUNNING
+  TESTING
+  PASSED
+  FAILED
+  BLOCKED
+}
+
+enum TaskStatus {
+  PENDING
+  READY
+  RUNNING
+  REVIEWING
+  PASSED
+  FAILED
+  BLOCKED
+}
+
 // Root domain object for a user's product idea. Later sprints (analysis,
 // architecture, sprint planning, execution) hang their own models off this
 // via `projectId` rather than growing this table with their JSON output.
@@ -74,6 +96,7 @@ model Project {
   updatedAt      DateTime          @updatedAt
   analyses       ProjectAnalysis[]
   architectures  Architecture[]
+  sprintPlans    SprintPlan[]
 
   @@index([userId, archivedAt])
   @@map("projects")
@@ -132,9 +155,10 @@ model ProjectAnalysis {
 // entity: it is regenerable, versioned business output, not a property of
 // its parent.
 model Architecture {
-  id        String  @id @default(uuid())
-  projectId String
-  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  id          String       @id @default(uuid())
+  projectId   String
+  project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sprintPlans SprintPlan[]
 
   // Exactly which analysis version this architecture was built from —
   // survives later ProjectAnalysis regeneration/edits so historical
@@ -183,4 +207,143 @@ model Architecture {
   @@index([projectId, createdAt])
   @@index([projectAnalysisId])
   @@map("architectures")
+}
+
+// Structured, versioned delivery strategy produced from a specific
+// Architecture version. Architecture describes HOW the product should be
+// built; SprintPlan breaks that into an ordered, dependency-checked sequence
+// of Sprints and Tasks ready for later autonomous execution. Like
+// ProjectAnalysis/Architecture, this is its own entity — never a JSON blob
+// on Project — and each version's Sprint/Task graph is immutable once
+// created; regeneration or editing creates a whole new graph rather than
+// touching the old one.
+model SprintPlan {
+  id        String  @id @default(uuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  // Exactly which architecture version this plan was built from — survives
+  // later Architecture regeneration/edits so historical plans always show
+  // their true lineage.
+  architectureId String
+  architecture   Architecture @relation(fields: [architectureId], references: [id], onDelete: Cascade)
+
+  version        Int
+  source         AnalysisSource
+  basedOnVersion Int?
+
+  summary              String
+  strategy             String
+  estimatedSprintCount Int?
+
+  // Null on USER_EDITED versions — no AI call produced them.
+  promptName        String?
+  promptVersion     String?
+  provider          String?
+  model             String?
+  inputTokens       Int?
+  outputTokens      Int?
+  totalTokens       Int?
+  latencyMs         Int?
+  attempts          Int?
+  providerRequestId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sprints Sprint[]
+  tasks   Task[]
+
+  @@unique([projectId, version])
+  @@index([projectId, createdAt])
+  @@index([architectureId])
+  @@map("sprint_plans")
+}
+
+model Sprint {
+  id           String     @id @default(uuid())
+  sprintPlanId String
+  sprintPlan   SprintPlan @relation(fields: [sprintPlanId], references: [id], onDelete: Cascade)
+
+  number      Int
+  title       String
+  objective   String
+  description String?
+  status      SprintStatus @default(PENDING)
+  order       Int
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tasks Task[]
+
+  // "This sprint depends on ..." / "... sprints that depend on this one".
+  dependencies SprintDependency[] @relation("SprintDependencies")
+  dependents   SprintDependency[] @relation("SprintDependents")
+
+  @@unique([sprintPlanId, number])
+  @@index([sprintPlanId, order])
+  @@map("sprints")
+}
+
+// Explicit join row rather than an int/string array: a real relational graph
+// is what later orchestration needs to answer "can this sprint start yet?" —
+// see also TaskDependency below for the same reasoning at task granularity.
+model SprintDependency {
+  id                String @id @default(uuid())
+  sprintId          String
+  dependsOnSprintId String
+  sprint            Sprint @relation("SprintDependencies", fields: [sprintId], references: [id], onDelete: Cascade)
+  dependsOnSprint   Sprint @relation("SprintDependents", fields: [dependsOnSprintId], references: [id], onDelete: Cascade)
+
+  @@unique([sprintId, dependsOnSprintId])
+  @@map("sprint_dependencies")
+}
+
+model Task {
+  id           String     @id @default(uuid())
+  // Denormalized alongside `sprintId` specifically so task keys can be
+  // enforced unique across the *whole plan* (`@@unique([sprintPlanId,
+  // key])`), not merely within one sprint, without an awkward cross-table
+  // query — and so future orchestration can list "all tasks in this plan"
+  // directly.
+  sprintPlanId String
+  sprintPlan   SprintPlan @relation(fields: [sprintPlanId], references: [id], onDelete: Cascade)
+  sprintId     String
+  sprint       Sprint     @relation(fields: [sprintId], references: [id], onDelete: Cascade)
+
+  key         String
+  title       String
+  description String
+  status      TaskStatus @default(PENDING)
+  order       Int
+
+  // MVP: JSON arrays, not one-row-per-criterion tables (section 64) — these
+  // are descriptive planning content, not relationships later orchestration
+  // needs to traverse the way task dependencies are.
+  acceptanceCriteria     Json
+  validationExpectations Json
+  requirementIds         Json
+  architectureAreas      Json
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  dependencies TaskDependency[] @relation("TaskDependencies")
+  dependents   TaskDependency[] @relation("TaskDependents")
+
+  @@unique([sprintPlanId, key])
+  @@index([sprintId, order])
+  @@map("tasks")
+}
+
+model TaskDependency {
+  id              String @id @default(uuid())
+  taskId          String
+  dependsOnTaskId String
+  task            Task   @relation("TaskDependencies", fields: [taskId], references: [id], onDelete: Cascade)
+  dependsOnTask   Task   @relation("TaskDependents", fields: [dependsOnTaskId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, dependsOnTaskId])
+  @@map("task_dependencies")
 }

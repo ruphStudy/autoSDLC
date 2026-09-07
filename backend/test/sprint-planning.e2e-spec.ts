@@ -1,0 +1,689 @@
+import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { Test, TestingModule } from '@nestjs/testing';
+import * as request from 'supertest';
+import { AppModule } from '../src/app.module';
+import { PrismaService } from '../src/prisma/prisma.service';
+import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
+import {
+  PLANNING_AI_PROVIDER,
+  PlanningOperation,
+} from '../src/ai/planning/planning-ai.constants';
+import { PlanningAIProvider } from '../src/ai/planning/contracts/planning-provider.interface';
+import {
+  PlanningAIError,
+  PlanningErrorCode,
+} from '../src/ai/planning/errors/planning-ai.error';
+
+function validAnalysisContent(
+  overrides: Partial<Record<string, unknown>> = {},
+) {
+  return {
+    summary: 'A mock interview platform.',
+    targetUsers: [{ name: 'Job seekers', description: 'Engineers', needs: [] }],
+    goals: [{ title: 'Confidence', description: 'Feel prepared' }],
+    features: [
+      {
+        name: 'Mock interviews',
+        description: 'AI-led sessions',
+        priority: 'must_have',
+      },
+    ],
+    functionalRequirements: [
+      {
+        id: 'FR-001',
+        title: 'Start interview',
+        description: 'Start a session',
+        priority: 'must_have',
+      },
+    ],
+    nonFunctionalRequirements: [
+      { category: 'performance', requirement: 'Fast responses' },
+    ],
+    assumptions: [{ assumption: 'Users have a mic.' }],
+    risks: [{ risk: 'Audio quality', severity: 'medium' }],
+    unresolvedQuestions: [
+      { question: 'Record sessions?', importance: 'medium' },
+    ],
+    integrations: [
+      { name: 'STT API', purpose: 'Transcription', required: true },
+    ],
+    ...overrides,
+  };
+}
+
+function analysisResult(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    data: validAnalysisContent(overrides),
+    usage: { inputTokens: 500, outputTokens: 300, totalTokens: 800 },
+    metadata: {
+      provider: 'openai',
+      model: 'gpt-4o-mini',
+      operation: PlanningOperation.PROJECT_ANALYSIS,
+      latencyMs: 42,
+      attempts: 1,
+      requestId: 'req-analysis-1',
+    },
+  };
+}
+
+function validArchitectureContent(
+  overrides: Partial<Record<string, unknown>> = {},
+) {
+  return {
+    summary: 'A modular NestJS monolith with a React frontend.',
+    frontendArchitecture: {
+      framework: 'React',
+      language: 'TypeScript',
+      componentStrategy: 'Hooks-based.',
+    },
+    backendArchitecture: {
+      framework: 'NestJS',
+      language: 'TypeScript',
+      architecturalStyle: 'Modular monolith',
+      modules: [
+        { name: 'interviews', responsibility: 'Manages interview sessions.' },
+      ],
+    },
+    apiArchitecture: {
+      style: 'REST',
+      conventions: [],
+      majorResourceGroups: [],
+    },
+    databaseArchitecture: {
+      databaseType: 'Relational',
+      technology: 'PostgreSQL',
+      rationale: 'Consistency for a CRUD-heavy MVP.',
+      majorEntities: [],
+    },
+    authenticationArchitecture: {
+      authenticationMethod: 'JWT',
+      tokenOrSessionStrategy: 'Access + refresh tokens.',
+      authorizationModel: 'Owner-only access.',
+    },
+    integrationArchitecture: [],
+    infrastructureArchitecture: {
+      runtimeComponents: ['API server', 'PostgreSQL'],
+    },
+    deploymentArchitecture: {
+      environments: ['production'],
+      deploymentStrategy: 'Single-region container deployment.',
+      ciCdApproach: 'CI runs lint/test/build on every push.',
+      configurationStrategy: 'Environment variables.',
+      secretsStrategy: 'Managed secret store.',
+    },
+    securityArchitecture: {
+      controls: [{ area: 'Auth', recommendation: 'bcrypt hashing.' }],
+    },
+    testingStrategy: {
+      unitTesting: { approach: 'Jest' },
+      integrationTesting: { approach: 'Supertest' },
+      e2eTesting: { approach: 'Supertest' },
+    },
+    nonFunctionalDecisions: [],
+    architectureDecisions: [
+      {
+        id: 'ADR-001',
+        title: 'Modular monolith',
+        context: 'Small MVP team.',
+        decision: 'One deployable app.',
+        rationale: 'Operational simplicity.',
+      },
+    ],
+    requirementTraceability: [
+      { requirementId: 'FR-001', architectureAreas: ['backendArchitecture'] },
+    ],
+    unresolvedQuestions: [],
+    constraints: [],
+    ...overrides,
+  };
+}
+
+function architectureResult(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    data: validArchitectureContent(overrides),
+    usage: { inputTokens: 700, outputTokens: 500, totalTokens: 1200 },
+    metadata: {
+      provider: 'openai',
+      model: 'gpt-4o-mini',
+      operation: PlanningOperation.ARCHITECTURE_GENERATION,
+      latencyMs: 84,
+      attempts: 1,
+      requestId: 'req-architecture-1',
+    },
+  };
+}
+
+function validationExpectation(
+  overrides: Partial<Record<string, unknown>> = {},
+) {
+  return {
+    type: 'unit_test',
+    description: 'Unit tests pass.',
+    required: true,
+    ...overrides,
+  };
+}
+
+function validSprintPlanContent(
+  overrides: Partial<Record<string, unknown>> = {},
+) {
+  return {
+    summary: 'Deliver the interview flow across two sprints.',
+    strategy: 'Build foundations first, then layer features.',
+    sprints: [
+      {
+        number: 1,
+        title: 'Foundations',
+        objective: 'Stand up the core interview session model.',
+        dependencies: [],
+        tasks: [
+          {
+            key: 'S1-T1',
+            title: 'Create interview session model',
+            description: 'Implement the session entity and start endpoint.',
+            dependencies: [],
+            acceptanceCriteria: ['A session can be started.'],
+            validationExpectations: [validationExpectation()],
+            requirementIds: ['FR-001'],
+            architectureAreas: ['backendArchitecture'],
+          },
+        ],
+      },
+      {
+        number: 2,
+        title: 'Session UI',
+        objective: 'Expose the session flow in the frontend.',
+        dependencies: [1],
+        tasks: [
+          {
+            key: 'S2-T1',
+            title: 'Build session start page',
+            description:
+              'Frontend page to start and view an interview session.',
+            dependencies: ['S1-T1'],
+            acceptanceCriteria: ['A user can start a session from the UI.'],
+            validationExpectations: [
+              validationExpectation({ type: 'e2e_test' }),
+            ],
+            requirementIds: [],
+            architectureAreas: ['frontendArchitecture'],
+          },
+        ],
+      },
+    ],
+    ...overrides,
+  };
+}
+
+function sprintPlanResult(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    data: validSprintPlanContent(overrides),
+    usage: { inputTokens: 900, outputTokens: 700, totalTokens: 1600 },
+    metadata: {
+      provider: 'openai',
+      model: 'gpt-4o-mini',
+      operation: PlanningOperation.SPRINT_PLANNING,
+      latencyMs: 120,
+      attempts: 1,
+      requestId: 'req-sprint-plan-1',
+    },
+  };
+}
+
+describe('Sprint Planning (e2e)', () => {
+  let app: INestApplication;
+  let prisma: PrismaService;
+  const createdEmails: string[] = [];
+  const generateStructuredOutput = jest.fn();
+
+  const stubProvider: PlanningAIProvider = {
+    generateStructuredOutput,
+    healthCheck: jest.fn(),
+  };
+
+  const uniqueEmail = (label: string) => {
+    const email = `${label}-${Date.now()}-${Math.random().toString(36).slice(2)}@example.com`;
+    createdEmails.push(email);
+    return email;
+  };
+
+  const registerUser = async (label: string) => {
+    const email = uniqueEmail(label);
+    const res = await request(app.getHttpServer())
+      .post('/auth/register')
+      .send({ email, password: 'Sup3rSecret1' });
+    return res.body.accessToken as string;
+  };
+
+  const createProjectWithArchitecture = async (token: string) => {
+    const projectRes = await request(app.getHttpServer())
+      .post('/projects')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        name: 'Interview Prep Platform',
+        brief: 'Build a mock interview platform.',
+      });
+    const projectId = projectRes.body.id as string;
+
+    generateStructuredOutput.mockResolvedValueOnce(analysisResult());
+    await request(app.getHttpServer())
+      .post(`/projects/${projectId}/analysis/generate`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(201);
+
+    generateStructuredOutput.mockResolvedValueOnce(architectureResult());
+    await request(app.getHttpServer())
+      .post(`/projects/${projectId}/architecture/generate`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(201);
+
+    return projectId;
+  };
+
+  beforeAll(async () => {
+    const moduleFixture: TestingModule = await Test.createTestingModule({
+      imports: [AppModule],
+    })
+      .overrideProvider(PLANNING_AI_PROVIDER)
+      .useValue(stubProvider)
+      .compile();
+
+    app = moduleFixture.createNestApplication();
+    app.useGlobalPipes(
+      new ValidationPipe({
+        whitelist: true,
+        forbidNonWhitelisted: true,
+        transform: true,
+      }),
+    );
+    app.useGlobalFilters(new HttpExceptionFilter());
+    await app.init();
+
+    prisma = moduleFixture.get(PrismaService);
+  });
+
+  beforeEach(() => {
+    generateStructuredOutput.mockReset();
+  });
+
+  afterAll(async () => {
+    if (createdEmails.length) {
+      await prisma.user.deleteMany({ where: { email: { in: createdEmails } } });
+    }
+    await app.close();
+  });
+
+  it('rejects unauthenticated access to every sprint plan route', async () => {
+    await request(app.getHttpServer())
+      .post('/projects/x/sprint-plan/generate')
+      .expect(401);
+    await request(app.getHttpServer())
+      .get('/projects/x/sprint-plan')
+      .expect(401);
+  });
+
+  it('rejects generation when no Architecture exists yet', async () => {
+    const token = await registerUser('plan-no-arch');
+    const projectRes = await request(app.getHttpServer())
+      .post('/projects')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'No Architecture Project', brief: 'x' });
+
+    await request(app.getHttpServer())
+      .post(`/projects/${projectRes.body.id}/sprint-plan/generate`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(409);
+  });
+
+  describe('full lifecycle for the owning user', () => {
+    let token: string;
+    let projectId: string;
+
+    beforeAll(async () => {
+      token = await registerUser('plan-owner');
+      projectId = await createProjectWithArchitecture(token);
+    });
+
+    it('generates sprint plan v1 from the latest architecture, covering every functional requirement', async () => {
+      generateStructuredOutput.mockResolvedValueOnce(sprintPlanResult());
+
+      const res = await request(app.getHttpServer())
+        .post(`/projects/${projectId}/sprint-plan/generate`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(201);
+
+      expect(res.body.version).toBe(1);
+      expect(res.body.source).toBe('AI_GENERATED');
+      expect(res.body.sprints).toHaveLength(2);
+      expect(res.body.sprints[0].tasks[0].key).toBe('S1-T1');
+      expect(res.body.sprints[1].dependsOnSprintNumbers).toEqual([1]);
+      expect(res.body.sprints[1].tasks[0].dependsOnTaskKeys).toEqual(['S1-T1']);
+
+      const project = await request(app.getHttpServer())
+        .get(`/projects/${projectId}`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+      expect(project.body.status).toBe('PLAN_READY');
+    });
+
+    it('rejects generating again while a sprint plan already exists (use regenerate)', async () => {
+      await request(app.getHttpServer())
+        .post(`/projects/${projectId}/sprint-plan/generate`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(409);
+    });
+
+    it('retrieves the current sprint plan', async () => {
+      const res = await request(app.getHttpServer())
+        .get(`/projects/${projectId}/sprint-plan`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+      expect(res.body.version).toBe(1);
+    });
+
+    it('edits the sprint plan as a full structured replacement, creating version 2 as USER_EDITED', async () => {
+      const edited = validSprintPlanContent({
+        summary: 'A manually refined delivery plan.',
+      });
+
+      const res = await request(app.getHttpServer())
+        .patch(`/projects/${projectId}/sprint-plan`)
+        .set('Authorization', `Bearer ${token}`)
+        .send(edited)
+        .expect(200);
+
+      expect(res.body.version).toBe(2);
+      expect(res.body.source).toBe('USER_EDITED');
+      expect(res.body.basedOnVersion).toBe(1);
+      expect(res.body.summary).toBe('A manually refined delivery plan.');
+    });
+
+    it('rejects an edit that leaves a functional requirement uncovered', async () => {
+      const uncovered = validSprintPlanContent();
+      uncovered.sprints[0].tasks[0].requirementIds = [];
+
+      await request(app.getHttpServer())
+        .patch(`/projects/${projectId}/sprint-plan`)
+        .set('Authorization', `Bearer ${token}`)
+        .send(uncovered)
+        .expect(400);
+    });
+
+    it('rejects an edit with a dependency cycle', async () => {
+      const cyclic = validSprintPlanContent();
+      cyclic.sprints[0].tasks[0].dependencies = ['S2-T1'];
+
+      await request(app.getHttpServer())
+        .patch(`/projects/${projectId}/sprint-plan`)
+        .set('Authorization', `Bearer ${token}`)
+        .send(cyclic)
+        .expect(400);
+    });
+
+    it('regenerates, creating version 3 and preserving history', async () => {
+      generateStructuredOutput.mockResolvedValueOnce(
+        sprintPlanResult({ summary: 'A freshly regenerated delivery plan.' }),
+      );
+
+      const res = await request(app.getHttpServer())
+        .post(`/projects/${projectId}/sprint-plan/regenerate`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(201);
+
+      expect(res.body.version).toBe(3);
+      expect(res.body.source).toBe('AI_GENERATED');
+      expect(res.body.summary).toBe('A freshly regenerated delivery plan.');
+    });
+
+    it('lists version history, newest first, preserving every version', async () => {
+      const res = await request(app.getHttpServer())
+        .get(`/projects/${projectId}/sprint-plan/versions`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+
+      expect(res.body.map((v: { version: number }) => v.version)).toEqual([
+        3, 2, 1,
+      ]);
+      expect(res.body.map((v: { source: string }) => v.source)).toEqual([
+        'AI_GENERATED',
+        'USER_EDITED',
+        'AI_GENERATED',
+      ]);
+    });
+
+    it('retrieves a specific historical version', async () => {
+      const res = await request(app.getHttpServer())
+        .get(`/projects/${projectId}/sprint-plan/versions/1`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+      expect(res.body.version).toBe(1);
+      expect(res.body.source).toBe('AI_GENERATED');
+    });
+
+    it('returns 404 for a version that does not exist', async () => {
+      await request(app.getHttpServer())
+        .get(`/projects/${projectId}/sprint-plan/versions/99`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(404);
+    });
+  });
+
+  describe('provider failure handling', () => {
+    let token: string;
+    let projectId: string;
+
+    beforeAll(async () => {
+      token = await registerUser('plan-failure');
+      projectId = await createProjectWithArchitecture(token);
+    });
+
+    it('returns a safe normalized error and restores the project to ANALYSIS_READY', async () => {
+      generateStructuredOutput.mockRejectedValueOnce(
+        new PlanningAIError({
+          code: PlanningErrorCode.PROVIDER_UNAVAILABLE,
+          message:
+            'raw internal provider detail that must never reach the client',
+          provider: 'openai',
+          retryable: true,
+        }),
+      );
+
+      const res = await request(app.getHttpServer())
+        .post(`/projects/${projectId}/sprint-plan/generate`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(503);
+      expect(JSON.stringify(res.body)).not.toContain(
+        'raw internal provider detail',
+      );
+
+      const project = await request(app.getHttpServer())
+        .get(`/projects/${projectId}`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+      expect(project.body.status).toBe('ANALYSIS_READY');
+
+      await request(app.getHttpServer())
+        .get(`/projects/${projectId}/sprint-plan`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(404);
+    });
+
+    it('rejects and restores status when the AI result leaves a functional requirement uncovered', async () => {
+      const uncovered = validSprintPlanContent();
+      uncovered.sprints[0].tasks[0].requirementIds = [];
+      generateStructuredOutput.mockResolvedValueOnce({
+        data: uncovered,
+        usage: {},
+        metadata: {
+          provider: 'openai',
+          model: 'gpt-4o-mini',
+          operation: PlanningOperation.SPRINT_PLANNING,
+          latencyMs: 10,
+          attempts: 1,
+        },
+      });
+
+      await request(app.getHttpServer())
+        .post(`/projects/${projectId}/sprint-plan/generate`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(422);
+
+      const project = await request(app.getHttpServer())
+        .get(`/projects/${projectId}`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+      expect(project.body.status).toBe('ANALYSIS_READY');
+    });
+
+    it('allows a subsequent successful retry after a failed generation', async () => {
+      generateStructuredOutput.mockResolvedValueOnce(sprintPlanResult());
+
+      await request(app.getHttpServer())
+        .post(`/projects/${projectId}/sprint-plan/generate`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(201);
+    });
+
+    it('preserves the existing sprint plan when a regeneration attempt fails', async () => {
+      generateStructuredOutput.mockRejectedValueOnce(
+        new PlanningAIError({
+          code: PlanningErrorCode.TIMEOUT,
+          message: 'timed out',
+          provider: 'openai',
+          retryable: true,
+        }),
+      );
+
+      await request(app.getHttpServer())
+        .post(`/projects/${projectId}/sprint-plan/regenerate`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(504);
+
+      const current = await request(app.getHttpServer())
+        .get(`/projects/${projectId}/sprint-plan`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+      expect(current.body.version).toBe(1);
+
+      const project = await request(app.getHttpServer())
+        .get(`/projects/${projectId}`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+      expect(project.body.status).toBe('PLAN_READY');
+    });
+  });
+
+  describe('ownership isolation between users', () => {
+    let ownerToken: string;
+    let otherToken: string;
+    let projectId: string;
+
+    beforeAll(async () => {
+      ownerToken = await registerUser('plan-iso-owner');
+      otherToken = await registerUser('plan-iso-other');
+      projectId = await createProjectWithArchitecture(ownerToken);
+
+      generateStructuredOutput.mockResolvedValueOnce(sprintPlanResult());
+      await request(app.getHttpServer())
+        .post(`/projects/${projectId}/sprint-plan/generate`)
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .expect(201);
+    });
+
+    it('prevents another user from generating a sprint plan for the project', async () => {
+      await request(app.getHttpServer())
+        .post(`/projects/${projectId}/sprint-plan/regenerate`)
+        .set('Authorization', `Bearer ${otherToken}`)
+        .expect(404);
+    });
+
+    it('prevents another user from viewing the sprint plan', async () => {
+      await request(app.getHttpServer())
+        .get(`/projects/${projectId}/sprint-plan`)
+        .set('Authorization', `Bearer ${otherToken}`)
+        .expect(404);
+    });
+
+    it('prevents another user from viewing the version history', async () => {
+      await request(app.getHttpServer())
+        .get(`/projects/${projectId}/sprint-plan/versions`)
+        .set('Authorization', `Bearer ${otherToken}`)
+        .expect(404);
+    });
+
+    it('prevents another user from editing the sprint plan', async () => {
+      await request(app.getHttpServer())
+        .patch(`/projects/${projectId}/sprint-plan`)
+        .set('Authorization', `Bearer ${otherToken}`)
+        .send(validSprintPlanContent())
+        .expect(404);
+    });
+
+    it('leaves the sprint plan intact and visible to its real owner', async () => {
+      await request(app.getHttpServer())
+        .get(`/projects/${projectId}/sprint-plan`)
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .expect(200);
+    });
+  });
+
+  describe('archived project policy', () => {
+    it('blocks generation, regeneration, and edit for an archived project but allows viewing', async () => {
+      const token = await registerUser('plan-archived');
+      const projectId = await createProjectWithArchitecture(token);
+
+      generateStructuredOutput.mockResolvedValueOnce(sprintPlanResult());
+      await request(app.getHttpServer())
+        .post(`/projects/${projectId}/sprint-plan/generate`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .post(`/projects/${projectId}/archive`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+
+      await request(app.getHttpServer())
+        .post(`/projects/${projectId}/sprint-plan/regenerate`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(409);
+
+      await request(app.getHttpServer())
+        .patch(`/projects/${projectId}/sprint-plan`)
+        .set('Authorization', `Bearer ${token}`)
+        .send(validSprintPlanContent())
+        .expect(409);
+
+      await request(app.getHttpServer())
+        .get(`/projects/${projectId}/sprint-plan`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+    });
+  });
+
+  describe('pre-development edit lock', () => {
+    it('blocks editing the sprint plan once the project has moved into development', async () => {
+      const token = await registerUser('plan-in-dev');
+      const projectId = await createProjectWithArchitecture(token);
+
+      generateStructuredOutput.mockResolvedValueOnce(sprintPlanResult());
+      await request(app.getHttpServer())
+        .post(`/projects/${projectId}/sprint-plan/generate`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(201);
+
+      // Sprint 7+ introduces the real transition into development; simulated
+      // here directly since no API path into DEVELOPING exists yet.
+      await prisma.project.update({
+        where: { id: projectId },
+        data: { status: 'DEVELOPING' },
+      });
+
+      await request(app.getHttpServer())
+        .patch(`/projects/${projectId}/sprint-plan`)
+        .set('Authorization', `Bearer ${token}`)
+        .send(validSprintPlanContent())
+        .expect(409);
+    });
+  });
+});

@@ -818,3 +818,48 @@ code {
 .traceability-arrow {
   color: var(--text);
 }
+
+/* Sprint plan editor */
+
+.sprint-edit-card {
+  border: 1px solid var(--accent-border);
+  border-radius: 8px;
+  background: var(--accent-bg);
+  padding: 14px 18px;
+  margin-bottom: 16px;
+}
+
+.sprint-edit-card-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.sprint-edit-card-header input[type='number'] {
+  width: 70px;
+}
+
+.dependency-select {
+  flex-basis: 100%;
+}
+
+.dependency-select > span {
+  display: block;
+  font-size: 13px;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+.dependency-select-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.task-edit-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+}
