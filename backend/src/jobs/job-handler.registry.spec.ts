@@ -16,4 +16,16 @@ describe('JobHandlerRegistry', () => {
     const registry = new JobHandlerRegistry([]);
     expect(registry.resolve(JobType.PROJECT_PREPARATION)).toBeUndefined();
   });
+
+  it('accepts a handler registering itself after construction (self-registration)', () => {
+    const registry = new JobHandlerRegistry([]);
+    const handler: JobHandler = {
+      type: JobType.WORKSPACE_PREPARE,
+      execute: jest.fn(),
+    };
+
+    expect(registry.resolve(JobType.WORKSPACE_PREPARE)).toBeUndefined();
+    registry.register(handler);
+    expect(registry.resolve(JobType.WORKSPACE_PREPARE)).toBe(handler);
+  });
 });

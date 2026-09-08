@@ -109,6 +109,7 @@ enum TaskStatus {
 enum JobType {
   SYSTEM_TEST
   PROJECT_PREPARATION
+  WORKSPACE_PREPARE
 }
 
 enum JobStatus {
@@ -155,6 +156,7 @@ model Project {
   sprintPlans    SprintPlan[]
   approvals      Approval[]
   jobs           Job[]
+  workspace      ProjectWorkspace?
 
   @@index([userId, archivedAt])
   @@map("projects")
@@ -541,4 +543,56 @@ model JobEvent {
 
   @@index([jobId, createdAt])
   @@map("job_events")
+}
+
+// Low-level Git/filesystem lifecycle for a Project's isolated workspace —
+// deliberately its own domain, not ProjectStatus (which tracks the planning
+// workflow, not filesystem readiness). PostgreSQL only ever stores this
+// metadata; the actual source code lives in Git/the filesystem (see
+// WorkspaceService) — this row is never the source of truth for content.
+enum WorkspaceStatus {
+  NOT_PREPARED
+  PREPARING
+  READY
+  INVALID
+  FAILED
+  CLEANING
+}
+
+// One row per Project (MVP: a single active workspace, never multiple
+// worktrees/branches-per-task). `repositoryType`/`repositoryUrl` are
+// deliberately NOT duplicated here — Project remains the source for those;
+// this model only records the *actual prepared* Git state, which can only
+// be known after running real Git commands (see GitService).
+model ProjectWorkspace {
+  id        String  @id @default(uuid())
+  projectId String  @unique
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  status WorkspaceStatus @default(NOT_PREPARED)
+
+  // Absolute filesystem path — internal only, never returned by any API
+  // response (see WorkspaceService.toRecord).
+  workspacePath String?
+
+  defaultBranch     String?
+  developmentBranch String?
+  currentBranch     String?
+
+  remoteName String?
+  // Sanitized: credentials are stripped before this is ever persisted.
+  remoteUrl  String?
+
+  headCommitSha String?
+
+  errorCode    String?
+  errorMessage String?
+
+  preparedAt      DateTime?
+  lastValidatedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("project_workspaces")
 }

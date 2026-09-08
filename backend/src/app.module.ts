@@ -11,6 +11,7 @@ import { ArchitectureModule } from './architecture/architecture.module';
 import { SprintPlanningModule } from './sprint-planning/sprint-planning.module';
 import { ApprovalModule } from './approval/approval.module';
 import { JobsModule } from './jobs/jobs.module';
+import { WorkspaceModule } from './workspace/workspace.module';
 import { envValidationSchema } from './config/env.validation';
 
 @Module({
@@ -28,6 +29,7 @@ import { envValidationSchema } from './config/env.validation';
     SprintPlanningModule,
     ApprovalModule,
     JobsModule,
+    WorkspaceModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -19,4 +19,11 @@ export class JobHandlerRegistry {
   resolve(type: JobType): JobHandler | undefined {
     return this.handlers.get(type);
   }
+
+  // Lets a handler in a feature module that cannot be added to JOB_HANDLERS
+  // without creating a circular module dependency register itself instead
+  // (typically from its own OnModuleInit). See workspace-prepare.handler.ts.
+  register(handler: JobHandler): void {
+    this.handlers.set(handler.type, handler);
+  }
 }

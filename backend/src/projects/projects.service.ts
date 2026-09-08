@@ -1,20 +1,31 @@
+import * as fs from 'node:fs/promises';
 import {
   ConflictException,
   Injectable,
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { Project, ProjectStatus, RepositoryType } from '@prisma/client';
+import { ConfigService } from '@nestjs/config';
+import {
+  Project,
+  ProjectStatus,
+  RepositoryType,
+  WorkspaceStatus,
+} from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
 import { ArchivedFilter } from './types/project.types';
+import { resolveProjectWorkspacePath } from '../workspace/workspace-path.util';
 
 @Injectable()
 export class ProjectsService {
   private readonly logger = new Logger(ProjectsService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly config: ConfigService,
+  ) {}
 
   // Every mutating/reading operation below goes through this, so ownership
   // can never accidentally be skipped: a project that isn't the caller's
@@ -89,6 +100,26 @@ export class ProjectsService {
         ? null
         : (dto.repositoryUrl ?? existing.repositoryUrl);
 
+    const repositoryConfigChanged =
+      nextRepositoryType !== existing.repositoryType ||
+      repositoryUrl !== existing.repositoryUrl;
+
+    if (repositoryConfigChanged) {
+      // Approval records and Git history are keyed to "this project's
+      // repository" — swapping it out from under a prepared workspace would
+      // silently orphan that state. Workspace metadata is the source of
+      // truth here (see workspace/ — Sprint 9), read directly rather than
+      // importing WorkspaceModule, to keep the module graph one-directional.
+      const workspace = await this.prisma.projectWorkspace.findUnique({
+        where: { projectId: id },
+      });
+      if (workspace && workspace.status !== WorkspaceStatus.NOT_PREPARED) {
+        throw new ConflictException(
+          'Clean up or reprepare the workspace before changing repository configuration.',
+        );
+      }
+    }
+
     const project = await this.prisma.project.update({
       where: { id: existing.id },
       data: {
@@ -139,7 +170,29 @@ export class ProjectsService {
     await this.prisma.project.delete({ where: { id: existing.id } });
 
     this.logger.log(`Project deleted (id=${existing.id}, userId=${userId})`);
+
+    // Best-effort only: the Project row (and its ProjectWorkspace metadata
+    // row, via cascade) is already gone. A leftover workspace directory is a
+    // disk-space nit to clean up, never a reason to fail a delete that has
+    // already committed.
+    await this.cleanupWorkspaceDirectoryBestEffort(existing.id);
+
     return { success: true };
+  }
+
+  private async cleanupWorkspaceDirectoryBestEffort(
+    projectId: string,
+  ): Promise<void> {
+    try {
+      const root = this.config.get<string>('WORKSPACE_ROOT');
+      if (!root) return;
+      const target = resolveProjectWorkspacePath(root, projectId);
+      await fs.rm(target, { recursive: true, force: true });
+    } catch (error) {
+      this.logger.warn(
+        `Workspace directory cleanup failed for deleted project ${projectId}: ${(error as Error).message}`,
+      );
+    }
   }
 
   // Not wired to any endpoint yet: this is the controlled entry point later

@@ -1,5 +1,8 @@
-import { JobStatus } from '@prisma/client';
-import { isValidJobTransition } from './jobs.constants';
+import { JobStatus, JobType } from '@prisma/client';
+import {
+  isValidJobTransition,
+  JOB_TYPE_REQUIRES_DEVELOPMENT_APPROVAL,
+} from './jobs.constants';
 
 describe('isValidJobTransition', () => {
   it('allows QUEUED -> RUNNING and QUEUED -> CANCELLED', () => {
@@ -47,5 +50,22 @@ describe('isValidJobTransition', () => {
       expect(isValidJobTransition(JobStatus.FAILED, to)).toBe(false);
       expect(isValidJobTransition(JobStatus.CANCELLED, to)).toBe(false);
     }
+  });
+});
+
+describe('JOB_TYPE_REQUIRES_DEVELOPMENT_APPROVAL', () => {
+  it('requires development approval for WORKSPACE_PREPARE, same as PROJECT_PREPARATION', () => {
+    expect(
+      JOB_TYPE_REQUIRES_DEVELOPMENT_APPROVAL[JobType.WORKSPACE_PREPARE],
+    ).toBe(true);
+    expect(
+      JOB_TYPE_REQUIRES_DEVELOPMENT_APPROVAL[JobType.PROJECT_PREPARATION],
+    ).toBe(true);
+  });
+
+  it('exempts SYSTEM_TEST as pure infrastructure validation', () => {
+    expect(JOB_TYPE_REQUIRES_DEVELOPMENT_APPROVAL[JobType.SYSTEM_TEST]).toBe(
+      false,
+    );
   });
 });

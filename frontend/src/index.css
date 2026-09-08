@@ -988,3 +988,32 @@ code {
   color: var(--text-h);
   resize: vertical;
 }
+
+/* Workspace panel */
+
+.workspace-panel {
+  margin-top: 24px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.workspace-panel-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.workspace-diff {
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px;
+  overflow-x: auto;
+  font-size: 13px;
+  white-space: pre;
+  max-height: 400px;
+  overflow-y: auto;
+}

@@ -29,6 +29,9 @@ import { ProjectPreparationJobHandler } from './handlers/project-preparation.han
       inject: [SystemTestJobHandler, ProjectPreparationJobHandler],
     },
   ],
-  exports: [JobService, JobWorkerService],
+  // JobHandlerRegistry is exported so feature modules that would otherwise
+  // create a circular dependency (e.g. WorkspaceModule) can self-register
+  // their handlers via OnModuleInit instead of being added to JOB_HANDLERS.
+  exports: [JobService, JobWorkerService, JobHandlerRegistry],
 })
 export class JobsModule {}

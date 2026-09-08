@@ -1,5 +1,6 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
-import { ProjectStatus, RepositoryType } from '@prisma/client';
+import { ConfigService } from '@nestjs/config';
+import { ProjectStatus, RepositoryType, WorkspaceStatus } from '@prisma/client';
 import { ProjectsService } from './projects.service';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -31,7 +32,11 @@ describe('ProjectsService', () => {
       update: jest.Mock;
       delete: jest.Mock;
     };
+    projectWorkspace: {
+      findUnique: jest.Mock;
+    };
   };
+  let config: { get: jest.Mock };
   let service: ProjectsService;
 
   beforeEach(() => {
@@ -43,8 +48,15 @@ describe('ProjectsService', () => {
         update: jest.fn(),
         delete: jest.fn(),
       },
+      projectWorkspace: {
+        findUnique: jest.fn(),
+      },
     };
-    service = new ProjectsService(prisma as unknown as PrismaService);
+    config = { get: jest.fn() };
+    service = new ProjectsService(
+      prisma as unknown as PrismaService,
+      config as unknown as ConfigService,
+    );
   });
 
   describe('create', () => {
@@ -191,6 +203,59 @@ describe('ProjectsService', () => {
       expect(updateArgs.data.preferredStack).toBe('React + NestJS');
       expect(updateArgs.data.name).toBe('New Name');
     });
+
+    it('allows changes unrelated to repository config even if a workspace exists', async () => {
+      prisma.project.findFirst.mockResolvedValue(buildProject());
+      prisma.project.update.mockResolvedValue(buildProject());
+      prisma.projectWorkspace.findUnique.mockResolvedValue({
+        status: WorkspaceStatus.READY,
+      });
+
+      await expect(
+        service.update('user-1', 'project-1', { name: 'New Name' }),
+      ).resolves.toBeDefined();
+      expect(prisma.project.update).toHaveBeenCalled();
+    });
+
+    it('rejects a repository configuration change while a prepared workspace exists', async () => {
+      prisma.project.findFirst.mockResolvedValue(
+        buildProject({
+          repositoryType: RepositoryType.NEW,
+          repositoryUrl: null,
+        }),
+      );
+      prisma.projectWorkspace.findUnique.mockResolvedValue({
+        status: WorkspaceStatus.READY,
+      });
+
+      await expect(
+        service.update('user-1', 'project-1', {
+          repositoryType: RepositoryType.EXISTING,
+          repositoryUrl: 'https://example.com/org/repo.git',
+        }),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(prisma.project.update).not.toHaveBeenCalled();
+    });
+
+    it('allows a repository configuration change when the workspace is NOT_PREPARED', async () => {
+      prisma.project.findFirst.mockResolvedValue(
+        buildProject({
+          repositoryType: RepositoryType.NEW,
+          repositoryUrl: null,
+        }),
+      );
+      prisma.project.update.mockResolvedValue(buildProject());
+      prisma.projectWorkspace.findUnique.mockResolvedValue({
+        status: WorkspaceStatus.NOT_PREPARED,
+      });
+
+      await expect(
+        service.update('user-1', 'project-1', {
+          repositoryType: RepositoryType.EXISTING,
+          repositoryUrl: 'https://example.com/org/repo.git',
+        }),
+      ).resolves.toBeDefined();
+    });
   });
 
   describe('archive / restore', () => {
@@ -246,12 +311,25 @@ describe('ProjectsService', () => {
     it('deletes an owned project', async () => {
       prisma.project.findFirst.mockResolvedValue(buildProject());
       prisma.project.delete.mockResolvedValue(buildProject());
+      config.get.mockReturnValue(undefined);
 
       const result = await service.remove('user-1', 'project-1');
 
       expect(prisma.project.delete).toHaveBeenCalledWith({
         where: { id: 'project-1' },
       });
+      expect(result).toEqual({ success: true });
+    });
+
+    it('succeeds even if best-effort workspace cleanup fails', async () => {
+      prisma.project.findFirst.mockResolvedValue(buildProject());
+      prisma.project.delete.mockResolvedValue(buildProject());
+      // An invalid (non-UUID) id makes resolveProjectWorkspacePath throw —
+      // deletion must not fail because of it.
+      config.get.mockReturnValue('/tmp/autosdlc-workspaces');
+
+      const result = await service.remove('user-1', 'project-1');
+
       expect(result).toEqual({ success: true });
     });
   });

@@ -41,4 +41,17 @@ export const envValidationSchema = Joi.object({
   JOB_RETRY_MAX_DELAY_SECONDS: Joi.number().integer().min(1).default(300),
   JOB_MAX_PAYLOAD_BYTES: Joi.number().integer().min(1024).default(65536),
   JOB_MAX_RESULT_BYTES: Joi.number().integer().min(1024).default(65536),
+
+  // Git/workspace infrastructure (Sprint 9). Defaults to a system temp
+  // directory, deliberately outside this repository — never let a
+  // customer's cloned/initialized workspace land inside the orchestrator's
+  // own working tree (see WorkspaceConfigService).
+  WORKSPACE_ROOT: Joi.string().default('/tmp/autosdlc-workspaces'),
+  WORKSPACE_MAX_SIZE_MB: Joi.number().integer().min(1).default(2048),
+  GIT_COMMAND_TIMEOUT_MS: Joi.number().integer().min(1000).default(60000),
+  GIT_CLONE_TIMEOUT_MS: Joi.number().integer().min(1000).default(180000),
+  GIT_DEFAULT_BRANCH: Joi.string().default('main'),
+  GIT_MAX_OUTPUT_BYTES: Joi.number().integer().min(1024).default(1048576),
+  GIT_AUTHOR_NAME: Joi.string().default('Autonomous Dev Orchestrator'),
+  GIT_AUTHOR_EMAIL: Joi.string().default('autodev@localhost'),
 });
