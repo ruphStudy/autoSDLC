@@ -310,6 +310,9 @@ describe('ProjectAnalysisService', () => {
 
   describe('regenerate', () => {
     it('requires ANALYSIS_READY and creates the next version, preserving the old one', async () => {
+      projectsService.findOneForUser.mockResolvedValue(
+        buildProject({ status: ProjectStatus.ANALYSIS_READY }),
+      );
       prisma.projectAnalysis.aggregate.mockResolvedValue({
         _max: { version: 1 },
       });
@@ -341,7 +344,61 @@ describe('ProjectAnalysisService', () => {
       expect(prisma.projectAnalysis.create).toHaveBeenCalledTimes(1);
     });
 
+    it('also allows regenerating an already-approved current analysis, creating a new unapproved version', async () => {
+      projectsService.findOneForUser.mockResolvedValue(
+        buildProject({ status: ProjectStatus.ANALYSIS_APPROVED }),
+      );
+      prisma.projectAnalysis.aggregate.mockResolvedValue({
+        _max: { version: 1 },
+      });
+      prisma.projectAnalysis.create.mockResolvedValue(
+        buildAnalysisRow({ id: 'analysis-2', version: 2 }),
+      );
+      planningAIProvider.generateStructuredOutput.mockResolvedValue({
+        data: buildAnalysisContent({ summary: 'Updated summary' }),
+        usage: {},
+        metadata: {
+          provider: 'openai',
+          model: 'gpt-4o-mini',
+          operation: PlanningOperation.PROJECT_ANALYSIS,
+          latencyMs: 10,
+          attempts: 1,
+        },
+      });
+
+      const analysis = await service.regenerate('user-1', 'project-1');
+
+      expect(projectsService.transitionStatus).toHaveBeenCalledWith(
+        'user-1',
+        'project-1',
+        ProjectStatus.ANALYSIS_APPROVED,
+        ProjectStatus.ANALYZING,
+      );
+      // The new version is unapproved regardless of the prior version's status.
+      expect(prisma.project.update).toHaveBeenCalledWith({
+        where: { id: 'project-1' },
+        data: { status: ProjectStatus.ANALYSIS_READY },
+      });
+      expect(analysis.version).toBe(2);
+    });
+
+    it('rejects regeneration from a status that is neither ANALYSIS_READY nor ANALYSIS_APPROVED', async () => {
+      projectsService.findOneForUser.mockResolvedValue(
+        buildProject({ status: ProjectStatus.DRAFT }),
+      );
+
+      await expect(
+        service.regenerate('user-1', 'project-1'),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(
+        planningAIProvider.generateStructuredOutput,
+      ).not.toHaveBeenCalled();
+    });
+
     it('restores ANALYSIS_READY (not DRAFT) when regeneration fails', async () => {
+      projectsService.findOneForUser.mockResolvedValue(
+        buildProject({ status: ProjectStatus.ANALYSIS_READY }),
+      );
       planningAIProvider.generateStructuredOutput.mockRejectedValue(
         new PlanningAIError({
           code: PlanningErrorCode.TIMEOUT,
@@ -361,6 +418,32 @@ describe('ProjectAnalysisService', () => {
         'project-1',
         ProjectStatus.ANALYZING,
         ProjectStatus.ANALYSIS_READY,
+      );
+    });
+
+    it('restores ANALYSIS_APPROVED (the status it started from) when regeneration of an approved analysis fails', async () => {
+      projectsService.findOneForUser.mockResolvedValue(
+        buildProject({ status: ProjectStatus.ANALYSIS_APPROVED }),
+      );
+      planningAIProvider.generateStructuredOutput.mockRejectedValue(
+        new PlanningAIError({
+          code: PlanningErrorCode.TIMEOUT,
+          message: 'timed out',
+          provider: 'openai',
+          retryable: true,
+        }),
+      );
+
+      await expect(
+        service.regenerate('user-1', 'project-1'),
+      ).rejects.toBeInstanceOf(HttpException);
+
+      expect(projectsService.transitionStatus).toHaveBeenNthCalledWith(
+        2,
+        'user-1',
+        'project-1',
+        ProjectStatus.ANALYZING,
+        ProjectStatus.ANALYSIS_APPROVED,
       );
     });
   });

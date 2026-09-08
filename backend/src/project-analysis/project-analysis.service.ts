@@ -69,11 +69,28 @@ export class ProjectAnalysisService {
     userId: string,
     projectId: string,
   ): Promise<ProjectAnalysis> {
+    const project = await this.projectsService.findOneForUser(
+      userId,
+      projectId,
+    );
+    const allowedEntry: ProjectStatus[] = [
+      ProjectStatus.ANALYSIS_READY,
+      ProjectStatus.ANALYSIS_APPROVED,
+    ];
+    if (!allowedEntry.includes(project.status)) {
+      throw new ConflictException(
+        `Project status is ${project.status}, expected one of ${allowedEntry.join(', ')}`,
+      );
+    }
+
+    // Regenerating an already-approved analysis creates a new, unapproved
+    // current version — a failed attempt, however, changes nothing, so it
+    // must restore to whichever status the project actually started in.
     return this.runGeneration(
       userId,
       projectId,
-      ProjectStatus.ANALYSIS_READY,
-      ProjectStatus.ANALYSIS_READY,
+      project.status,
+      project.status,
     );
   }
 

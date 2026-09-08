@@ -38,6 +38,12 @@ import {
   SprintPlanVersionSummary,
 } from './types/sprint-plan.types';
 import { EditSprintPlanDto } from './dto/edit-sprint-plan.dto';
+import { ApprovalService } from '../approval/approval.service';
+import {
+  ApprovalError,
+  ApprovalErrorCode,
+} from '../approval/errors/approval.error';
+import { mapApprovalErrorToHttpException } from '../approval/errors/approval-error.mapper';
 
 interface AIGenerationMetadata {
   promptName: string;
@@ -71,6 +77,7 @@ export class SprintPlanningService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly projectsService: ProjectsService,
+    private readonly approvalService: ApprovalService,
     @Inject(PLANNING_AI_PROVIDER)
     private readonly planningAIProvider: PlanningAIProvider,
   ) {}
@@ -82,6 +89,7 @@ export class SprintPlanningService {
     );
     this.assertNotArchived(project);
     const architecture = await this.getLatestArchitectureOrThrow(projectId);
+    await this.assertArchitectureApproved(projectId);
 
     const existing = await this.findLatestSprintPlan(projectId);
     if (existing) {
@@ -91,7 +99,7 @@ export class SprintPlanningService {
     }
 
     const sprintPlan = await this.runGeneration(userId, project, architecture, {
-      expectedStatus: ProjectStatus.ANALYSIS_READY,
+      expectedStatus: ProjectStatus.ARCHITECTURE_APPROVED,
       basedOnVersion: null,
     });
     return this.hydrate(sprintPlan.id);
@@ -107,6 +115,7 @@ export class SprintPlanningService {
     );
     this.assertNotArchived(project);
     const architecture = await this.getLatestArchitectureOrThrow(projectId);
+    await this.assertArchitectureApproved(projectId);
 
     const existing = await this.findLatestSprintPlan(projectId);
     if (!existing) {
@@ -115,11 +124,39 @@ export class SprintPlanningService {
       );
     }
 
+    const allowedEntry: ProjectStatus[] = [
+      ProjectStatus.PLAN_READY,
+      ProjectStatus.PLAN_APPROVED,
+    ];
+    if (!allowedEntry.includes(project.status)) {
+      throw new ConflictException(
+        `Project status is ${project.status}, expected one of ${allowedEntry.join(', ')}`,
+      );
+    }
+
     const sprintPlan = await this.runGeneration(userId, project, architecture, {
-      expectedStatus: ProjectStatus.PLAN_READY,
+      expectedStatus: project.status,
       basedOnVersion: null,
     });
     return this.hydrate(sprintPlan.id);
+  }
+
+  // Generation gate for both first-time generation and regeneration: a
+  // Sprint Plan may only be (re)generated from the *current* Architecture
+  // version once a human has approved it. Checked directly against the
+  // Approval table, not merely inferred from ProjectStatus.
+  private async assertArchitectureApproved(projectId: string): Promise<void> {
+    const approved =
+      await this.approvalService.isCurrentArchitectureApproved(projectId);
+    if (!approved) {
+      throw mapApprovalErrorToHttpException(
+        new ApprovalError({
+          code: ApprovalErrorCode.STAGE_NOT_READY,
+          message:
+            'Current Architecture must be approved before Sprint Planning can be generated.',
+        }),
+      );
+    }
   }
 
   async getCurrent(

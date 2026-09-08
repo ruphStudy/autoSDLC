@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { architectureApi } from '../api/architecture.api';
+import { HistoricalApprovalBadge } from '../approval/HistoricalApprovalBadge';
 import { ArchitectureContentView } from '../architecture/ArchitectureContentView';
 import { ArchitectureMetadata } from '../architecture/ArchitectureMetadata';
 import type { Architecture } from '../architecture/types';
@@ -46,6 +47,11 @@ export function ArchitectureVersionPage() {
         </div>
       </div>
 
+      <HistoricalApprovalBadge
+        projectId={architecture.projectId}
+        stage="ARCHITECTURE"
+        version={architecture.version}
+      />
       <ArchitectureMetadata architecture={architecture} />
       <ArchitectureContentView architecture={architecture} />
     </div>

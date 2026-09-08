@@ -3,6 +3,7 @@ import axios from 'axios';
 import { Link, useParams } from 'react-router-dom';
 import { projectAnalysisApi } from '../api/project-analysis.api';
 import { projectsApi } from '../api/projects.api';
+import { ApprovalPanel } from '../approval/ApprovalPanel';
 import { AnalysisContentView } from '../project-analysis/AnalysisContentView';
 import { AnalysisMetadata } from '../project-analysis/AnalysisMetadata';
 import type { AnalysisVersionSummary, ProjectAnalysis } from '../project-analysis/types';
@@ -106,11 +107,17 @@ export function ProjectAnalysisPage() {
       setAnalysis(result);
       const versionList = await projectAnalysisApi.getProjectAnalysisVersions(id);
       setVersions(versionList);
+      const refreshedProject = await projectsApi.getProject(id);
+      setProject(refreshedProject);
     } catch (err) {
       setError(errorMessage(err, 'Analysis regeneration failed. Please try again.'));
     } finally {
       setWorking(false);
     }
+  };
+
+  const refreshProjectStatus = () => {
+    if (id) projectsApi.getProject(id).then(setProject);
   };
 
   if (loading) {
@@ -166,6 +173,12 @@ export function ProjectAnalysisPage() {
 
       {!working && analysis && (
         <>
+          <ApprovalPanel
+            projectId={project.id}
+            stage="ANALYSIS"
+            currentVersion={analysis.version}
+            onDecided={refreshProjectStatus}
+          />
           <AnalysisMetadata analysis={analysis} />
           <AnalysisContentView analysis={analysis} />
 

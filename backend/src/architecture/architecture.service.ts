@@ -24,6 +24,12 @@ import {
   PlanningAIError,
   PlanningErrorCode,
 } from '../ai/planning/errors/planning-ai.error';
+import { ApprovalService } from '../approval/approval.service';
+import {
+  ApprovalError,
+  ApprovalErrorCode,
+} from '../approval/errors/approval.error';
+import { mapApprovalErrorToHttpException } from '../approval/errors/approval-error.mapper';
 import { ArchitecturePrompt } from './prompts/architecture.prompt';
 import {
   ArchitectureContent,
@@ -64,6 +70,7 @@ export class ArchitectureService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly projectsService: ProjectsService,
+    private readonly approvalService: ApprovalService,
     @Inject(PLANNING_AI_PROVIDER)
     private readonly planningAIProvider: PlanningAIProvider,
   ) {}
@@ -75,6 +82,7 @@ export class ArchitectureService {
     );
     this.assertNotArchived(project);
     const analysis = await this.getLatestAnalysisOrThrow(projectId);
+    await this.assertAnalysisApproved(projectId);
 
     const existing = await this.findLatestArchitecture(projectId);
     if (existing) {
@@ -85,6 +93,7 @@ export class ArchitectureService {
 
     return this.runGeneration(userId, project, analysis, {
       basedOnVersion: null,
+      expectedStatus: ProjectStatus.ANALYSIS_APPROVED,
     });
   }
 
@@ -95,6 +104,7 @@ export class ArchitectureService {
     );
     this.assertNotArchived(project);
     const analysis = await this.getLatestAnalysisOrThrow(projectId);
+    await this.assertAnalysisApproved(projectId);
 
     const existing = await this.findLatestArchitecture(projectId);
     if (!existing) {
@@ -103,9 +113,40 @@ export class ArchitectureService {
       );
     }
 
+    const allowedEntry: ProjectStatus[] = [
+      ProjectStatus.ARCHITECTURE_READY,
+      ProjectStatus.ARCHITECTURE_APPROVED,
+    ];
+    if (!allowedEntry.includes(project.status)) {
+      throw new ConflictException(
+        `Project status is ${project.status}, expected one of ${allowedEntry.join(', ')}`,
+      );
+    }
+
     return this.runGeneration(userId, project, analysis, {
       basedOnVersion: null,
+      expectedStatus: project.status,
     });
+  }
+
+  // Generation gate for both first-time generation and regeneration:
+  // Architecture may only be (re)generated from the *current* Project
+  // Analysis version once a human has approved it. Checked directly against
+  // the Approval table (the source of truth), not merely inferred from
+  // ProjectStatus, so this can never be bypassed by a status left slightly
+  // out of sync.
+  private async assertAnalysisApproved(projectId: string): Promise<void> {
+    const approved =
+      await this.approvalService.isCurrentAnalysisApproved(projectId);
+    if (!approved) {
+      throw mapApprovalErrorToHttpException(
+        new ApprovalError({
+          code: ApprovalErrorCode.STAGE_NOT_READY,
+          message:
+            'Current Project Analysis must be approved before Architecture can be generated.',
+        }),
+      );
+    }
   }
 
   async getCurrent(userId: string, projectId: string): Promise<Architecture> {
@@ -232,18 +273,17 @@ export class ArchitectureService {
     userId: string,
     project: Project,
     analysis: ProjectAnalysis,
-    options: { basedOnVersion: number | null },
+    options: { basedOnVersion: number | null; expectedStatus: ProjectStatus },
   ): Promise<Architecture> {
-    // Atomically claims the "generating" slot: if the project isn't
-    // ANALYSIS_READY (already PLANNING from a concurrent request, or a
-    // post-analysis/in-development state), this throws a 409 immediately —
-    // no AI call is made, and no race on the version number below is
-    // possible since only the request that wins this transition ever
-    // reaches persistence.
+    // Atomically claims the "generating" slot: if the project isn't in
+    // `expectedStatus` (already PLANNING from a concurrent request, or the
+    // wrong state), this throws a 409 immediately — no AI call is made, and
+    // no race on the version number below is possible since only the
+    // request that wins this transition ever reaches persistence.
     await this.projectsService.transitionStatus(
       userId,
       project.id,
-      ProjectStatus.ANALYSIS_READY,
+      options.expectedStatus,
       ProjectStatus.PLANNING,
     );
 
@@ -312,7 +352,11 @@ export class ArchitectureService {
         `Architecture generation completed (projectId=${project.id}, attempts=${aiMetadata.attempts}, latencyMs=${aiMetadata.latencyMs})`,
       );
     } catch (rawError) {
-      await this.restoreStatusAfterFailure(userId, project.id);
+      await this.restoreStatusAfterFailure(
+        userId,
+        project.id,
+        options.expectedStatus,
+      );
       if (rawError instanceof PlanningAIError) {
         this.logger.warn(
           `Architecture generation failed (projectId=${project.id}, code=${rawError.code})`,
@@ -334,7 +378,11 @@ export class ArchitectureService {
         aiMetadata,
       });
     } catch (persistError) {
-      await this.restoreStatusAfterFailure(userId, project.id);
+      await this.restoreStatusAfterFailure(
+        userId,
+        project.id,
+        options.expectedStatus,
+      );
       throw persistError;
     }
   }
@@ -491,7 +539,10 @@ export class ArchitectureService {
 
       await tx.project.update({
         where: { id: projectId },
-        data: { status: ProjectStatus.ANALYSIS_READY },
+        // A new version (generated, regenerated, or manually edited) is
+        // always unapproved — ARCHITECTURE_READY, never *_APPROVED, even if
+        // the version it replaces had been approved.
+        data: { status: ProjectStatus.ARCHITECTURE_READY },
       });
 
       return architecture;
@@ -501,19 +552,20 @@ export class ArchitectureService {
   private async restoreStatusAfterFailure(
     userId: string,
     projectId: string,
+    target: ProjectStatus,
   ): Promise<void> {
     try {
       await this.projectsService.transitionStatus(
         userId,
         projectId,
         ProjectStatus.PLANNING,
-        ProjectStatus.ANALYSIS_READY,
+        target,
       );
     } catch (compensationError) {
       // The one situation we must never allow silently: a project stuck in
       // PLANNING forever. Log loudly so this is never a quiet failure.
       this.logger.error(
-        `Failed to restore project status after architecture generation failure (projectId=${projectId})`,
+        `Failed to restore project status after architecture generation failure (projectId=${projectId}, target=${target})`,
         compensationError instanceof Error
           ? compensationError.stack
           : undefined,

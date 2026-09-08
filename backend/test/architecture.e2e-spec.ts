@@ -194,6 +194,13 @@ describe('Architecture (e2e)', () => {
       .set('Authorization', `Bearer ${token}`)
       .expect(201);
 
+    // Architecture generation now requires an approved current analysis.
+    await request(app.getHttpServer())
+      .post(`/projects/${projectId}/approvals/ANALYSIS`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ decision: 'APPROVED' })
+      .expect(200);
+
     return projectId;
   };
 
@@ -252,6 +259,26 @@ describe('Architecture (e2e)', () => {
       .expect(409);
   });
 
+  it('rejects generation when the current Project Analysis exists but is not approved', async () => {
+    const token = await registerUser('arch-unapproved-analysis');
+    const projectRes = await request(app.getHttpServer())
+      .post('/projects')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'Unapproved Analysis Project', brief: 'x' });
+    const projectId = projectRes.body.id as string;
+
+    generateStructuredOutput.mockResolvedValueOnce(analysisResult());
+    await request(app.getHttpServer())
+      .post(`/projects/${projectId}/analysis/generate`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(201);
+
+    await request(app.getHttpServer())
+      .post(`/projects/${projectId}/architecture/generate`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(409);
+  });
+
   describe('full lifecycle for the owning user', () => {
     let token: string;
     let projectId: string;
@@ -280,8 +307,7 @@ describe('Architecture (e2e)', () => {
         .get(`/projects/${projectId}`)
         .set('Authorization', `Bearer ${token}`)
         .expect(200);
-      // Project status returns to ANALYSIS_READY, not a new architecture-only status.
-      expect(project.body.status).toBe('ANALYSIS_READY');
+      expect(project.body.status).toBe('ARCHITECTURE_READY');
     });
 
     it('rejects generating again while architecture already exists (use regenerate)', async () => {
@@ -389,7 +415,7 @@ describe('Architecture (e2e)', () => {
       projectId = await createProjectWithAnalysis(token);
     });
 
-    it('returns a safe normalized error and restores the project to ANALYSIS_READY', async () => {
+    it('returns a safe normalized error and restores the project to ANALYSIS_APPROVED', async () => {
       generateStructuredOutput.mockRejectedValueOnce(
         new PlanningAIError({
           code: PlanningErrorCode.PROVIDER_UNAVAILABLE,
@@ -412,7 +438,7 @@ describe('Architecture (e2e)', () => {
         .get(`/projects/${projectId}`)
         .set('Authorization', `Bearer ${token}`)
         .expect(200);
-      expect(project.body.status).toBe('ANALYSIS_READY');
+      expect(project.body.status).toBe('ANALYSIS_APPROVED');
 
       await request(app.getHttpServer())
         .get(`/projects/${projectId}/architecture`)
@@ -454,7 +480,7 @@ describe('Architecture (e2e)', () => {
         .get(`/projects/${projectId}`)
         .set('Authorization', `Bearer ${token}`)
         .expect(200);
-      expect(project.body.status).toBe('ANALYSIS_READY');
+      expect(project.body.status).toBe('ARCHITECTURE_READY');
     });
   });
 

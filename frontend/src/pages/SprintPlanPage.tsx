@@ -4,6 +4,8 @@ import { Link, useParams } from 'react-router-dom';
 import { sprintPlanningApi } from '../api/sprint-planning.api';
 import { architectureApi } from '../api/architecture.api';
 import { projectsApi } from '../api/projects.api';
+import { ApprovalPanel } from '../approval/ApprovalPanel';
+import { StartDevelopmentPanel } from '../approval/StartDevelopmentPanel';
 import { SprintPlanContentView } from '../sprint-planning/SprintPlanContentView';
 import { SprintPlanMetadata } from '../sprint-planning/SprintPlanMetadata';
 import type { SprintPlan, SprintPlanVersionSummary } from '../sprint-planning/types';
@@ -186,6 +188,7 @@ export function SprintPlanPage() {
               ? `v${architectureVersionFor(plan.architectureId)}`
               : '(version unavailable)'}
           </p>
+          <ApprovalPanel projectId={project.id} stage="SPRINT_PLAN" currentVersion={plan.version} />
           <SprintPlanMetadata
             plan={plan}
             architectureVersion={architectureVersionFor(plan.architectureId)}
@@ -217,6 +220,8 @@ export function SprintPlanPage() {
               </ul>
             </section>
           )}
+
+          <StartDevelopmentPanel projectId={project.id} />
         </>
       )}
     </div>

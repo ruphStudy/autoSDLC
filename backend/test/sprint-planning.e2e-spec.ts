@@ -271,11 +271,24 @@ describe('Sprint Planning (e2e)', () => {
       .set('Authorization', `Bearer ${token}`)
       .expect(201);
 
+    await request(app.getHttpServer())
+      .post(`/projects/${projectId}/approvals/ANALYSIS`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ decision: 'APPROVED' })
+      .expect(200);
+
     generateStructuredOutput.mockResolvedValueOnce(architectureResult());
     await request(app.getHttpServer())
       .post(`/projects/${projectId}/architecture/generate`)
       .set('Authorization', `Bearer ${token}`)
       .expect(201);
+
+    // Sprint Plan generation now requires an approved current architecture.
+    await request(app.getHttpServer())
+      .post(`/projects/${projectId}/approvals/ARCHITECTURE`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ decision: 'APPROVED' })
+      .expect(200);
 
     return projectId;
   };
@@ -331,6 +344,36 @@ describe('Sprint Planning (e2e)', () => {
 
     await request(app.getHttpServer())
       .post(`/projects/${projectRes.body.id}/sprint-plan/generate`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(409);
+  });
+
+  it('rejects generation when the current Architecture exists but is not approved', async () => {
+    const token = await registerUser('plan-unapproved-arch');
+    const projectRes = await request(app.getHttpServer())
+      .post('/projects')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'Unapproved Architecture Project', brief: 'x' });
+    const projectId = projectRes.body.id as string;
+
+    generateStructuredOutput.mockResolvedValueOnce(analysisResult());
+    await request(app.getHttpServer())
+      .post(`/projects/${projectId}/analysis/generate`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(201);
+    await request(app.getHttpServer())
+      .post(`/projects/${projectId}/approvals/ANALYSIS`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ decision: 'APPROVED' })
+      .expect(200);
+    generateStructuredOutput.mockResolvedValueOnce(architectureResult());
+    await request(app.getHttpServer())
+      .post(`/projects/${projectId}/architecture/generate`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(201);
+
+    await request(app.getHttpServer())
+      .post(`/projects/${projectId}/sprint-plan/generate`)
       .set('Authorization', `Bearer ${token}`)
       .expect(409);
   });
@@ -477,7 +520,7 @@ describe('Sprint Planning (e2e)', () => {
       projectId = await createProjectWithArchitecture(token);
     });
 
-    it('returns a safe normalized error and restores the project to ANALYSIS_READY', async () => {
+    it('returns a safe normalized error and restores the project to ARCHITECTURE_APPROVED', async () => {
       generateStructuredOutput.mockRejectedValueOnce(
         new PlanningAIError({
           code: PlanningErrorCode.PROVIDER_UNAVAILABLE,
@@ -500,7 +543,7 @@ describe('Sprint Planning (e2e)', () => {
         .get(`/projects/${projectId}`)
         .set('Authorization', `Bearer ${token}`)
         .expect(200);
-      expect(project.body.status).toBe('ANALYSIS_READY');
+      expect(project.body.status).toBe('ARCHITECTURE_APPROVED');
 
       await request(app.getHttpServer())
         .get(`/projects/${projectId}/sprint-plan`)
@@ -532,7 +575,7 @@ describe('Sprint Planning (e2e)', () => {
         .get(`/projects/${projectId}`)
         .set('Authorization', `Bearer ${token}`)
         .expect(200);
-      expect(project.body.status).toBe('ANALYSIS_READY');
+      expect(project.body.status).toBe('ARCHITECTURE_APPROVED');
     });
 
     it('allows a subsequent successful retry after a failed generation', async () => {

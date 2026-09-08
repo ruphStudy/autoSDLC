@@ -14,6 +14,7 @@ import {
   PlanningErrorCode,
 } from '../ai/planning/errors/planning-ai.error';
 import { PlanningOperation } from '../ai/planning/planning-ai.constants';
+import { ApprovalService } from '../approval/approval.service';
 
 function buildProject(overrides: Partial<Record<string, unknown>> = {}) {
   const now = new Date();
@@ -26,7 +27,7 @@ function buildProject(overrides: Partial<Record<string, unknown>> = {}) {
     preferredStack: 'React + NestJS + PostgreSQL',
     repositoryType: RepositoryType.NEW,
     repositoryUrl: null,
-    status: ProjectStatus.ANALYSIS_READY,
+    status: ProjectStatus.ANALYSIS_APPROVED,
     archivedAt: null,
     createdAt: now,
     updatedAt: now,
@@ -180,6 +181,10 @@ describe('ArchitectureService', () => {
     findOneForUser: jest.Mock;
     transitionStatus: jest.Mock;
   };
+  let approvalService: {
+    isCurrentAnalysisApproved: jest.Mock;
+    isCurrentArchitectureApproved: jest.Mock;
+  };
   let planningAIProvider: { generateStructuredOutput: jest.Mock };
   let service: ArchitectureService;
 
@@ -205,17 +210,22 @@ describe('ArchitectureService', () => {
         .fn()
         .mockResolvedValue(buildProject({ status: ProjectStatus.PLANNING })),
     };
+    approvalService = {
+      isCurrentAnalysisApproved: jest.fn().mockResolvedValue(true),
+      isCurrentArchitectureApproved: jest.fn().mockResolvedValue(true),
+    };
     planningAIProvider = { generateStructuredOutput: jest.fn() };
 
     service = new ArchitectureService(
       prisma as unknown as PrismaService,
       projectsService as unknown as ProjectsService,
+      approvalService as unknown as ApprovalService,
       planningAIProvider as unknown as PlanningAIProvider,
     );
   });
 
   describe('generate', () => {
-    it('generates architecture v1 from the latest analysis, using ANALYSIS_READY <-> PLANNING as the lock', async () => {
+    it('generates architecture v1 from the latest analysis, using ANALYSIS_APPROVED <-> PLANNING as the lock', async () => {
       prisma.architecture.findFirst.mockResolvedValue(null);
       prisma.architecture.aggregate.mockResolvedValue({
         _max: { version: null },
@@ -240,7 +250,7 @@ describe('ArchitectureService', () => {
         1,
         'user-1',
         'project-1',
-        ProjectStatus.ANALYSIS_READY,
+        ProjectStatus.ANALYSIS_APPROVED,
         ProjectStatus.PLANNING,
       );
       expect(planningAIProvider.generateStructuredOutput).toHaveBeenCalledWith(
@@ -256,7 +266,7 @@ describe('ArchitectureService', () => {
       expect(createArgs.data.provider).toBe('openai');
       expect(prisma.project.update).toHaveBeenCalledWith({
         where: { id: 'project-1' },
-        data: { status: ProjectStatus.ANALYSIS_READY },
+        data: { status: ProjectStatus.ARCHITECTURE_READY },
       });
       expect(architecture.version).toBe(1);
     });
@@ -276,6 +286,18 @@ describe('ArchitectureService', () => {
       await expect(
         service.generate('user-1', 'project-1'),
       ).rejects.toBeInstanceOf(ConflictException);
+      expect(projectsService.transitionStatus).not.toHaveBeenCalled();
+      expect(
+        planningAIProvider.generateStructuredOutput,
+      ).not.toHaveBeenCalled();
+    });
+
+    it('rejects generation when the current Project Analysis is not approved', async () => {
+      approvalService.isCurrentAnalysisApproved.mockResolvedValue(false);
+
+      await expect(
+        service.generate('user-1', 'project-1'),
+      ).rejects.toBeInstanceOf(HttpException);
       expect(projectsService.transitionStatus).not.toHaveBeenCalled();
       expect(
         planningAIProvider.generateStructuredOutput,
@@ -310,7 +332,7 @@ describe('ArchitectureService', () => {
       prisma.architecture.findFirst.mockResolvedValue(null);
       projectsService.transitionStatus.mockRejectedValue(
         new ConflictException(
-          'Project status is PLANNING, expected ANALYSIS_READY',
+          'Project status is PLANNING, expected ANALYSIS_APPROVED',
         ),
       );
 
@@ -323,7 +345,7 @@ describe('ArchitectureService', () => {
       expect(prisma.architecture.create).not.toHaveBeenCalled();
     });
 
-    it('restores ANALYSIS_READY and normalizes the error when the provider fails', async () => {
+    it('restores ANALYSIS_APPROVED and normalizes the error when the provider fails', async () => {
       prisma.architecture.findFirst.mockResolvedValue(null);
       planningAIProvider.generateStructuredOutput.mockRejectedValue(
         new PlanningAIError({
@@ -343,7 +365,7 @@ describe('ArchitectureService', () => {
         'user-1',
         'project-1',
         ProjectStatus.PLANNING,
-        ProjectStatus.ANALYSIS_READY,
+        ProjectStatus.ANALYSIS_APPROVED,
       );
       expect(prisma.architecture.create).not.toHaveBeenCalled();
     });
@@ -378,7 +400,7 @@ describe('ArchitectureService', () => {
         'user-1',
         'project-1',
         ProjectStatus.PLANNING,
-        ProjectStatus.ANALYSIS_READY,
+        ProjectStatus.ANALYSIS_APPROVED,
       );
     });
 
@@ -405,13 +427,16 @@ describe('ArchitectureService', () => {
         'user-1',
         'project-1',
         ProjectStatus.PLANNING,
-        ProjectStatus.ANALYSIS_READY,
+        ProjectStatus.ANALYSIS_APPROVED,
       );
     });
   });
 
   describe('regenerate', () => {
     it('requires an existing architecture and creates the next version, preserving the old one', async () => {
+      projectsService.findOneForUser.mockResolvedValue(
+        buildProject({ status: ProjectStatus.ARCHITECTURE_READY }),
+      );
       prisma.architecture.findFirst.mockResolvedValue(
         buildArchitectureRow({ version: 1 }),
       );
@@ -433,8 +458,53 @@ describe('ArchitectureService', () => {
 
       const architecture = await service.regenerate('user-1', 'project-1');
 
+      expect(projectsService.transitionStatus).toHaveBeenNthCalledWith(
+        1,
+        'user-1',
+        'project-1',
+        ProjectStatus.ARCHITECTURE_READY,
+        ProjectStatus.PLANNING,
+      );
       expect(architecture.version).toBe(2);
       expect(prisma.architecture.create).toHaveBeenCalledTimes(1);
+    });
+
+    it('also allows regenerating an already-approved current architecture, creating a new unapproved version', async () => {
+      projectsService.findOneForUser.mockResolvedValue(
+        buildProject({ status: ProjectStatus.ARCHITECTURE_APPROVED }),
+      );
+      prisma.architecture.findFirst.mockResolvedValue(
+        buildArchitectureRow({ version: 1 }),
+      );
+      prisma.architecture.aggregate.mockResolvedValue({ _max: { version: 1 } });
+      prisma.architecture.create.mockResolvedValue(
+        buildArchitectureRow({ id: 'architecture-2', version: 2 }),
+      );
+      planningAIProvider.generateStructuredOutput.mockResolvedValue({
+        data: buildArchitectureContent(),
+        usage: {},
+        metadata: {
+          provider: 'openai',
+          model: 'gpt-4o-mini',
+          operation: PlanningOperation.ARCHITECTURE_GENERATION,
+          latencyMs: 10,
+          attempts: 1,
+        },
+      });
+
+      await service.regenerate('user-1', 'project-1');
+
+      expect(projectsService.transitionStatus).toHaveBeenNthCalledWith(
+        1,
+        'user-1',
+        'project-1',
+        ProjectStatus.ARCHITECTURE_APPROVED,
+        ProjectStatus.PLANNING,
+      );
+      expect(prisma.project.update).toHaveBeenCalledWith({
+        where: { id: 'project-1' },
+        data: { status: ProjectStatus.ARCHITECTURE_READY },
+      });
     });
 
     it('rejects regeneration when no architecture exists yet', async () => {
@@ -448,7 +518,39 @@ describe('ArchitectureService', () => {
       ).not.toHaveBeenCalled();
     });
 
-    it('restores ANALYSIS_READY and preserves the existing architecture when regeneration fails', async () => {
+    it('rejects regeneration when the current Project Analysis is no longer approved', async () => {
+      projectsService.findOneForUser.mockResolvedValue(
+        buildProject({ status: ProjectStatus.ARCHITECTURE_READY }),
+      );
+      prisma.architecture.findFirst.mockResolvedValue(buildArchitectureRow());
+      approvalService.isCurrentAnalysisApproved.mockResolvedValue(false);
+
+      await expect(
+        service.regenerate('user-1', 'project-1'),
+      ).rejects.toBeInstanceOf(HttpException);
+      expect(
+        planningAIProvider.generateStructuredOutput,
+      ).not.toHaveBeenCalled();
+    });
+
+    it('rejects regeneration from a status that is neither ARCHITECTURE_READY nor ARCHITECTURE_APPROVED', async () => {
+      projectsService.findOneForUser.mockResolvedValue(
+        buildProject({ status: ProjectStatus.ANALYSIS_APPROVED }),
+      );
+      prisma.architecture.findFirst.mockResolvedValue(buildArchitectureRow());
+
+      await expect(
+        service.regenerate('user-1', 'project-1'),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(
+        planningAIProvider.generateStructuredOutput,
+      ).not.toHaveBeenCalled();
+    });
+
+    it('restores ARCHITECTURE_READY and preserves the existing architecture when regeneration fails', async () => {
+      projectsService.findOneForUser.mockResolvedValue(
+        buildProject({ status: ProjectStatus.ARCHITECTURE_READY }),
+      );
       prisma.architecture.findFirst.mockResolvedValue(buildArchitectureRow());
       planningAIProvider.generateStructuredOutput.mockRejectedValue(
         new PlanningAIError({
@@ -468,7 +570,7 @@ describe('ArchitectureService', () => {
         'user-1',
         'project-1',
         ProjectStatus.PLANNING,
-        ProjectStatus.ANALYSIS_READY,
+        ProjectStatus.ARCHITECTURE_READY,
       );
       expect(prisma.architecture.create).not.toHaveBeenCalled();
     });

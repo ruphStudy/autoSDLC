@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { projectAnalysisApi } from '../api/project-analysis.api';
+import { HistoricalApprovalBadge } from '../approval/HistoricalApprovalBadge';
 import { AnalysisContentView } from '../project-analysis/AnalysisContentView';
 import { AnalysisMetadata } from '../project-analysis/AnalysisMetadata';
 import type { ProjectAnalysis } from '../project-analysis/types';
@@ -46,6 +47,11 @@ export function ProjectAnalysisVersionPage() {
         </div>
       </div>
 
+      <HistoricalApprovalBadge
+        projectId={analysis.projectId}
+        stage="ANALYSIS"
+        version={analysis.version}
+      />
       <AnalysisMetadata analysis={analysis} />
       <AnalysisContentView analysis={analysis} />
     </div>

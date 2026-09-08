@@ -24,6 +24,7 @@ model User {
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
   projects         Project[]
+  approvalsDecided Approval[]
 
   @@map("users")
 }
@@ -45,14 +46,38 @@ enum ProjectStatus {
   DRAFT
   ANALYZING
   ANALYSIS_READY
+  ANALYSIS_APPROVED
   PLANNING
+  ARCHITECTURE_READY
+  ARCHITECTURE_APPROVED
   PLAN_READY
+  PLAN_APPROVED
+  DEVELOPMENT_APPROVED
   AWAITING_APPROVAL
   DEVELOPING
   TESTING
   COMPLETED
   FAILED
   PAUSED
+}
+
+enum ApprovalStage {
+  ANALYSIS
+  ARCHITECTURE
+  SPRINT_PLAN
+  START_DEVELOPMENT
+}
+
+enum ApprovalDecision {
+  APPROVED
+  CHANGES_REQUESTED
+}
+
+enum ApprovalArtifactType {
+  PROJECT_ANALYSIS
+  ARCHITECTURE
+  SPRINT_PLAN
+  PROJECT
 }
 
 // Planning-time statuses only. Sprint 12+ (execution orchestration) is what
@@ -97,6 +122,7 @@ model Project {
   analyses       ProjectAnalysis[]
   architectures  Architecture[]
   sprintPlans    SprintPlan[]
+  approvals      Approval[]
 
   @@index([userId, archivedAt])
   @@map("projects")
@@ -112,6 +138,7 @@ model ProjectAnalysis {
   projectId     String
   project       Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
   architectures Architecture[]
+  approvals     Approval[]
 
   version        Int
   source         AnalysisSource
@@ -159,6 +186,7 @@ model Architecture {
   projectId   String
   project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
   sprintPlans SprintPlan[]
+  approvals   Approval[]
 
   // Exactly which analysis version this architecture was built from —
   // survives later ProjectAnalysis regeneration/edits so historical
@@ -251,8 +279,9 @@ model SprintPlan {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  sprints Sprint[]
-  tasks   Task[]
+  sprints   Sprint[]
+  tasks     Task[]
+  approvals Approval[]
 
   @@unique([projectId, version])
   @@index([projectId, createdAt])
@@ -346,4 +375,47 @@ model TaskDependency {
 
   @@unique([taskId, dependsOnTaskId])
   @@map("task_dependencies")
+}
+
+// Explicit human sign-off on a specific, exact planning-artifact version.
+// Append-only: every decision (approve or request-changes) is preserved as
+// its own row, never overwritten — "is the CURRENT version approved" is a
+// query (latest decision whose FK matches the current artifact row), not a
+// mutable flag. A real FK per artifact type (not a generic string id) means
+// an approval can never be mistaken for applying to the wrong version or the
+// wrong kind of artifact. START_DEVELOPMENT has no single artifact FK — it
+// approves the project's aggregate planning readiness, not one versioned
+// row — so all three FKs stay null for that stage; its correctness comes
+// from re-checking the other three stages live (see
+// ApprovalService.assertDevelopmentApproved), not from a stored snapshot.
+model Approval {
+  id        String  @id @default(uuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  stage        ApprovalStage
+  decision     ApprovalDecision
+  artifactType ApprovalArtifactType
+
+  projectAnalysisId String?
+  projectAnalysis   ProjectAnalysis? @relation(fields: [projectAnalysisId], references: [id], onDelete: Cascade)
+  architectureId    String?
+  architecture      Architecture?    @relation(fields: [architectureId], references: [id], onDelete: Cascade)
+  sprintPlanId      String?
+  sprintPlan        SprintPlan?      @relation(fields: [sprintPlanId], references: [id], onDelete: Cascade)
+
+  comment String?
+
+  decidedByUserId String
+  decidedByUser   User     @relation(fields: [decidedByUserId], references: [id], onDelete: Cascade)
+  decidedAt       DateTime @default(now())
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId, stage, decidedAt])
+  @@index([projectAnalysisId])
+  @@index([architectureId])
+  @@index([sprintPlanId])
+  @@map("approvals")
 }

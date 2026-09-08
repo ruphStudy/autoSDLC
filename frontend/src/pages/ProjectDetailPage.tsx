@@ -1,10 +1,17 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { projectsApi } from '../api/projects.api';
+import { approvalApi } from '../api/approval.api';
 import { StatusBadge } from '../projects/StatusBadge';
 import type { Project } from '../projects/types';
+import type { ApprovalSummary, ApprovalSummaryEntry } from '../approval/types';
 
-const FUTURE_STAGES = ['Development'];
+function stageStatusLabel(entry?: ApprovalSummaryEntry): string | null {
+  if (!entry || entry.version == null) return null;
+  if (entry.decision === 'APPROVED') return 'Approved';
+  if (entry.decision === 'CHANGES_REQUESTED') return 'Changes Requested';
+  return 'Ready for Review';
+}
 
 function formatDateTime(iso: string): string {
   return new Date(iso).toLocaleString(undefined, {
@@ -20,6 +27,7 @@ export function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [project, setProject] = useState<Project | null>(null);
+  const [summary, setSummary] = useState<ApprovalSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -29,6 +37,10 @@ export function ProjectDetailPage() {
       .getProject(id)
       .then(setProject)
       .catch(() => setError('This project could not be found.'));
+    approvalApi
+      .getSummary(id)
+      .then(setSummary)
+      .catch(() => setSummary(null));
   }, [id]);
 
   const handleArchive = async () => {
@@ -154,18 +166,45 @@ export function ProjectDetailPage() {
         <div className="stage-nav">
           <Link to={`/projects/${project.id}/analysis`} className="stage-nav-link">
             Analysis
+            {stageStatusLabel(summary?.analysis) && ` — ${stageStatusLabel(summary?.analysis)}`}
           </Link>
-          <Link to={`/projects/${project.id}/architecture`} className="stage-nav-link">
-            Architecture
-          </Link>
-          <Link to={`/projects/${project.id}/sprint-plan`} className="stage-nav-link">
-            Sprint Plan
-          </Link>
-          {FUTURE_STAGES.map((stage) => (
-            <button key={stage} type="button" disabled title="Coming in a future sprint">
-              {stage}
+
+          {summary?.analysis.decision === 'APPROVED' ? (
+            <Link to={`/projects/${project.id}/architecture`} className="stage-nav-link">
+              Architecture
+              {stageStatusLabel(summary?.architecture) &&
+                ` — ${stageStatusLabel(summary?.architecture)}`}
+            </Link>
+          ) : (
+            <button type="button" disabled title="Locked until Analysis is approved">
+              Architecture
             </button>
-          ))}
+          )}
+
+          {summary?.architecture.decision === 'APPROVED' ? (
+            <Link to={`/projects/${project.id}/sprint-plan`} className="stage-nav-link">
+              Sprint Plan
+              {stageStatusLabel(summary?.sprintPlan) &&
+                ` — ${stageStatusLabel(summary?.sprintPlan)}`}
+            </Link>
+          ) : (
+            <button type="button" disabled title="Locked until Architecture is approved">
+              Sprint Plan
+            </button>
+          )}
+
+          <button
+            type="button"
+            disabled
+            title={
+              summary?.startDevelopment.decision === 'APPROVED'
+                ? 'Approved — execution engine not started yet'
+                : 'Locked until the Sprint Plan and Start Development are approved'
+            }
+          >
+            Development
+            {summary?.startDevelopment.decision === 'APPROVED' && ' — Approved'}
+          </button>
         </div>
       </section>
     </div>

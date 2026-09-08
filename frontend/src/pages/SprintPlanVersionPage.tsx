@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { sprintPlanningApi } from '../api/sprint-planning.api';
+import { HistoricalApprovalBadge } from '../approval/HistoricalApprovalBadge';
 import { SprintPlanContentView } from '../sprint-planning/SprintPlanContentView';
 import { SprintPlanMetadata } from '../sprint-planning/SprintPlanMetadata';
 import type { SprintPlan } from '../sprint-planning/types';
@@ -46,6 +47,11 @@ export function SprintPlanVersionPage() {
         </div>
       </div>
 
+      <HistoricalApprovalBadge
+        projectId={plan.projectId}
+        stage="SPRINT_PLAN"
+        version={plan.version}
+      />
       <SprintPlanMetadata plan={plan} />
       <SprintPlanContentView plan={plan} />
     </div>

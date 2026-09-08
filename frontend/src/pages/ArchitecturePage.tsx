@@ -4,6 +4,7 @@ import { Link, useParams } from 'react-router-dom';
 import { architectureApi } from '../api/architecture.api';
 import { projectAnalysisApi } from '../api/project-analysis.api';
 import { projectsApi } from '../api/projects.api';
+import { ApprovalPanel } from '../approval/ApprovalPanel';
 import { ArchitectureContentView } from '../architecture/ArchitectureContentView';
 import { ArchitectureMetadata } from '../architecture/ArchitectureMetadata';
 import type { Architecture, ArchitectureVersionSummary } from '../architecture/types';
@@ -184,6 +185,11 @@ export function ArchitecturePage() {
               ? `v${analysisVersionFor(architecture.projectAnalysisId)}`
               : '(version unavailable)'}
           </p>
+          <ApprovalPanel
+            projectId={project.id}
+            stage="ARCHITECTURE"
+            currentVersion={architecture.version}
+          />
           <ArchitectureMetadata
             architecture={architecture}
             analysisVersion={analysisVersionFor(architecture.projectAnalysisId)}
