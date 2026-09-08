@@ -10,6 +10,7 @@ import { ProjectAnalysisModule } from './project-analysis/project-analysis.modul
 import { ArchitectureModule } from './architecture/architecture.module';
 import { SprintPlanningModule } from './sprint-planning/sprint-planning.module';
 import { ApprovalModule } from './approval/approval.module';
+import { JobsModule } from './jobs/jobs.module';
 import { envValidationSchema } from './config/env.validation';
 
 @Module({
@@ -26,6 +27,7 @@ import { envValidationSchema } from './config/env.validation';
     ArchitectureModule,
     SprintPlanningModule,
     ApprovalModule,
+    JobsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

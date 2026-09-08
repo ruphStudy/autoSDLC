@@ -14,17 +14,18 @@ datasource db {
 }
 
 model User {
-  id               String    @id @default(uuid())
-  email            String    @unique
+  id               String     @id @default(uuid())
+  email            String     @unique
   passwordHash     String
   firstName        String?
   lastName         String?
-  isActive         Boolean   @default(true)
+  isActive         Boolean    @default(true)
   refreshTokenHash String?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
   projects         Project[]
   approvalsDecided Approval[]
+  jobs             Job[]
 
   @@map("users")
 }
@@ -102,6 +103,36 @@ enum TaskStatus {
   BLOCKED
 }
 
+// Deliberately narrow for Sprint 8: only infrastructure/test-safe types.
+// Future sprints add their own real work types here (and register a
+// handler for each) — this enum is not meant to anticipate them.
+enum JobType {
+  SYSTEM_TEST
+  PROJECT_PREPARATION
+}
+
+enum JobStatus {
+  QUEUED
+  RUNNING
+  RETRY_WAIT
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+enum JobEventType {
+  CREATED
+  CLAIMED
+  STARTED
+  PROGRESS
+  RETRY_SCHEDULED
+  SUCCEEDED
+  FAILED
+  CANCEL_REQUESTED
+  CANCELLED
+  LOCK_RECOVERED
+}
+
 // Root domain object for a user's product idea. Later sprints (analysis,
 // architecture, sprint planning, execution) hang their own models off this
 // via `projectId` rather than growing this table with their JSON output.
@@ -123,6 +154,7 @@ model Project {
   architectures  Architecture[]
   sprintPlans    SprintPlan[]
   approvals      Approval[]
+  jobs           Job[]
 
   @@index([userId, archivedAt])
   @@map("projects")
@@ -418,4 +450,95 @@ model Approval {
   @@index([architectureId])
   @@index([sprintPlanId])
   @@map("approvals")
+}
+
+// Durable, provider-neutral background job. Postgres itself is the queue —
+// no Redis/BullMQ: workers claim rows with an atomic
+// `UPDATE ... FOR UPDATE SKIP LOCKED` (see JobService.claimBatch), so this
+// row is the only source of truth for both what to run and what already
+// ran. `payload`/`result` are generic JSON because Job is infrastructure
+// reused by unrelated future workflows — never store secrets/tokens here,
+// and never store large artifacts (those belong elsewhere; see
+// JOB_MAX_PAYLOAD_BYTES/JOB_MAX_RESULT_BYTES).
+model Job {
+  id        String   @id @default(uuid())
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type     JobType
+  status   JobStatus @default(QUEUED)
+  priority Int       @default(0)
+
+  payload Json
+  result  Json?
+
+  progress        Int     @default(0)
+  progressMessage String?
+
+  attemptCount Int @default(0)
+  maxAttempts  Int @default(3)
+
+  scheduledAt DateTime  @default(now())
+  startedAt   DateTime?
+  completedAt DateTime?
+  failedAt    DateTime?
+  cancelledAt DateTime?
+
+  // Best-effort cooperative cancellation signal for a RUNNING job — the
+  // handler observes this via JobExecutionContext.isCancellationRequested()
+  // and decides on its own whether/when it's safe to stop. Never forces
+  // termination: Sprint 8 has no external process to kill.
+  cancelRequestedAt DateTime?
+
+  // Claim ownership. Never exposed to API clients (see JobService.toRecord)
+  // — internal to the worker/recovery mechanism only.
+  lockedAt      DateTime?
+  lockedBy      String?
+  lockExpiresAt DateTime?
+
+  errorCode    String?
+  errorMessage String?
+
+  // Optional dedupe scope: (type, projectId, idempotencyKey). Null keys are
+  // distinct under Postgres's standard unique-index semantics, so this only
+  // constrains callers that explicitly opt in.
+  idempotencyKey String?
+
+  // Optional coarse-to-fine job composition for future workflows (a parent
+  // job spawning sub-jobs) — unused by Sprint 8's own handlers.
+  parentJobId String?
+  parent      Job?    @relation("JobHierarchy", fields: [parentJobId], references: [id], onDelete: SetNull)
+  children    Job[]   @relation("JobHierarchy")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  events JobEvent[]
+
+  @@unique([type, projectId, idempotencyKey])
+  @@index([status, scheduledAt])
+  @@index([status, priority, scheduledAt])
+  @@index([projectId])
+  @@index([lockExpiresAt])
+  @@map("jobs")
+}
+
+// Append-only audit trail — mirrors the Approval model's own reasoning
+// (Sprint 7): the mutable Job row shows current state, JobEvent shows how
+// it got there. Never overwritten or deleted independently of the Job.
+model JobEvent {
+  id    String       @id @default(uuid())
+  jobId String
+  job   Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  type  JobEventType
+
+  message  String?
+  metadata Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([jobId, createdAt])
+  @@map("job_events")
 }

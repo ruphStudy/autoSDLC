@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { projectsApi } from '../api/projects.api';
 import { approvalApi } from '../api/approval.api';
 import { StatusBadge } from '../projects/StatusBadge';
+import { JobsPanel } from '../jobs/JobsPanel';
 import type { Project } from '../projects/types';
 import type { ApprovalSummary, ApprovalSummaryEntry } from '../approval/types';
 
@@ -207,6 +208,11 @@ export function ProjectDetailPage() {
           </button>
         </div>
       </section>
+
+      <JobsPanel
+        projectId={project.id}
+        canPrepareDevelopment={summary?.startDevelopment.decision === 'APPROVED'}
+      />
     </div>
   );
 }
