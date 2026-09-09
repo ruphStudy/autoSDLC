@@ -23,6 +23,9 @@ import { WorkspacePrepareJobHandler } from './handlers/workspace-prepare.handler
     WorkspaceService,
     WorkspacePrepareJobHandler,
   ],
-  exports: [WorkspaceService],
+  // GitService is also exported for Sprint 10's coding-agent module, which
+  // needs it for pre-execution dirty-checks and post-execution changed-file
+  // detection — see coding-agent/providers/git-change-detection.util.ts.
+  exports: [WorkspaceService, GitService],
 })
 export class WorkspaceModule {}

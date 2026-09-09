@@ -166,6 +166,15 @@ export class WorkspaceService {
   // raw domain error so both HTTP and background-job callers can decide how
   // to surface it, mirroring ApprovalService.assertDevelopmentApproved.
   async assertWorkspaceReady(projectId: string): Promise<void> {
+    await this.getReadyWorkspacePath(projectId);
+  }
+
+  // Internal-only: hands the resolved workspace path to trusted server code
+  // (e.g. Sprint 10's CodingAgentService) that must actually operate on the
+  // workspace, never to an HTTP response body — WorkspaceRecord (the public
+  // DTO) deliberately excludes this field. Throws the same raw GitError as
+  // assertWorkspaceReady when the workspace isn't READY.
+  async getReadyWorkspacePath(projectId: string): Promise<string> {
     const workspace = await this.prisma.projectWorkspace.findUnique({
       where: { projectId },
     });
@@ -179,6 +188,7 @@ export class WorkspaceService {
         message: 'Workspace is not ready for development.',
       });
     }
+    return workspace.workspacePath;
   }
 
   // ---- preparation ---------------------------------------------------

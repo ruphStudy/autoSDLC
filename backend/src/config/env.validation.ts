@@ -54,4 +54,25 @@ export const envValidationSchema = Joi.object({
   GIT_MAX_OUTPUT_BYTES: Joi.number().integer().min(1024).default(1048576),
   GIT_AUTHOR_NAME: Joi.string().default('Autonomous Dev Orchestrator'),
   GIT_AUTHOR_EMAIL: Joi.string().default('autodev@localhost'),
+
+  // Coding agent provider (Sprint 10). Only 'claude' is supported today —
+  // listed explicitly so an unsupported value fails app startup instead of
+  // silently falling back (same reasoning as PLANNING_AI_PROVIDER above).
+  // Authentication is validated in CodingAgentConfigService, not here: the
+  // Claude Agent SDK accepts EITHER CLAUDE_API_KEY (mapped to
+  // ANTHROPIC_API_KEY) OR CLAUDE_CODE_OAUTH_TOKEN (the officially supported
+  // non-interactive token for CI/automation use, distinct from an
+  // interactive `claude login` session) — "at least one of two" isn't a
+  // clean Joi .when(), so both stay optional here.
+  CODING_AGENT_PROVIDER: Joi.string().valid('claude').default('claude'),
+  CLAUDE_API_KEY: Joi.string().optional(),
+  CLAUDE_CODE_OAUTH_TOKEN: Joi.string().optional(),
+  CLAUDE_MODEL: Joi.string().default('claude-sonnet-5'),
+  CLAUDE_MAX_TURNS: Joi.number().integer().min(1).max(200).default(25),
+  CLAUDE_EXECUTION_TIMEOUT_MS: Joi.number()
+    .integer()
+    .min(1000)
+    .max(3600000)
+    .default(900000),
+  CLAUDE_MAX_OUTPUT_BYTES: Joi.number().integer().min(1024).default(1048576),
 });

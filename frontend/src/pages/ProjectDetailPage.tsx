@@ -5,6 +5,7 @@ import { approvalApi } from '../api/approval.api';
 import { StatusBadge } from '../projects/StatusBadge';
 import { JobsPanel } from '../jobs/JobsPanel';
 import { WorkspacePanel } from '../workspace/WorkspacePanel';
+import { CodingAgentPanel } from '../coding-agent/CodingAgentPanel';
 import type { Project } from '../projects/types';
 import type { ApprovalSummary, ApprovalSummaryEntry } from '../approval/types';
 
@@ -216,6 +217,11 @@ export function ProjectDetailPage() {
       />
 
       <WorkspacePanel
+        projectId={project.id}
+        canPrepareDevelopment={summary?.startDevelopment.decision === 'APPROVED'}
+      />
+
+      <CodingAgentPanel
         projectId={project.id}
         canPrepareDevelopment={summary?.startDevelopment.decision === 'APPROVED'}
       />

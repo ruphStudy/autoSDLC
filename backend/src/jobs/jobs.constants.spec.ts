@@ -63,6 +63,12 @@ describe('JOB_TYPE_REQUIRES_DEVELOPMENT_APPROVAL', () => {
     ).toBe(true);
   });
 
+  it('requires development approval for CODING_AGENT_EXECUTION', () => {
+    expect(
+      JOB_TYPE_REQUIRES_DEVELOPMENT_APPROVAL[JobType.CODING_AGENT_EXECUTION],
+    ).toBe(true);
+  });
+
   it('exempts SYSTEM_TEST as pure infrastructure validation', () => {
     expect(JOB_TYPE_REQUIRES_DEVELOPMENT_APPROVAL[JobType.SYSTEM_TEST]).toBe(
       false,

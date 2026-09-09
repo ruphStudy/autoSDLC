@@ -31,14 +31,16 @@ export const JOB_TYPE_REQUIRES_DEVELOPMENT_APPROVAL: Record<JobType, boolean> =
     [JobType.SYSTEM_TEST]: false,
     [JobType.PROJECT_PREPARATION]: true,
     [JobType.WORKSPACE_PREPARE]: true,
+    [JobType.CODING_AGENT_EXECUTION]: true,
   };
 
 // Only PROJECT_PREPARATION and WORKSPACE_PREPARE are reachable through the
 // public API — SYSTEM_TEST is infrastructure-validation only, enqueued
 // directly via JobService in tests/internal callers, never accepted from a
-// client. WORKSPACE_PREPARE is actually enqueued via WorkspaceService.prepare
-// (which layers on additional workspace-state guards), not this generic list,
-// but is listed here for completeness of the JobType -> approval-gate map.
+// client. WORKSPACE_PREPARE and CODING_AGENT_EXECUTION are actually enqueued
+// via WorkspaceService.prepare / CodingAgentService.runDiagnostic (which
+// layer on additional state guards), not this generic list, but are listed
+// here for completeness of the JobType -> approval-gate map.
 export const PUBLICLY_ENQUEUABLE_JOB_TYPES: JobType[] = [
   JobType.PROJECT_PREPARATION,
 ];

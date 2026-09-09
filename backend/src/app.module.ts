@@ -12,6 +12,7 @@ import { SprintPlanningModule } from './sprint-planning/sprint-planning.module';
 import { ApprovalModule } from './approval/approval.module';
 import { JobsModule } from './jobs/jobs.module';
 import { WorkspaceModule } from './workspace/workspace.module';
+import { CodingAgentModule } from './coding-agent/coding-agent.module';
 import { envValidationSchema } from './config/env.validation';
 
 @Module({
@@ -30,6 +31,7 @@ import { envValidationSchema } from './config/env.validation';
     ApprovalModule,
     JobsModule,
     WorkspaceModule,
+    CodingAgentModule,
   ],
   controllers: [AppController],
   providers: [AppService],
