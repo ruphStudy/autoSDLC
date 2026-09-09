@@ -2,6 +2,7 @@ import type { SprintPlan, Task } from './types';
 import { TaskInstructionPreview } from '../task-instruction/TaskInstructionPreview';
 import { TaskExecutionPanel } from '../task-execution/TaskExecutionPanel';
 import { TaskValidationPanel } from '../task-validation/TaskValidationPanel';
+import { SprintExecutionPanel } from '../sprint-execution/SprintExecutionPanel';
 
 function Chips({ items }: { items: string[] }) {
   if (items.length === 0) return null;
@@ -125,6 +126,13 @@ export function SprintPlanContentView({
                 Depends on sprint{sprint.dependsOnSprintNumbers.length > 1 ? 's' : ''}:{' '}
                 {sprint.dependsOnSprintNumbers.join(', ')}
               </p>
+            )}
+            {canRunTasks && (
+              <SprintExecutionPanel
+                projectId={plan.projectId}
+                sprintId={sprint.id}
+                tasks={sprint.tasks}
+              />
             )}
             <ul className="analysis-card-list">
               {sprint.tasks

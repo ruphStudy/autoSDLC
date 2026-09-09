@@ -116,7 +116,10 @@ describe('TaskExecutionService', () => {
       },
       sprint: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
       sprintPlan: { findFirst: jest.fn() },
-      project: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
+      project: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        findUniqueOrThrow: jest.fn(),
+      },
       projectWorkspace: { findUnique: jest.fn() },
       taskExecution: {
         create: jest.fn(),
@@ -549,6 +552,42 @@ describe('TaskExecutionService', () => {
           data: { status: TaskStatus.READY },
         }),
       );
+    });
+  });
+
+  describe('beginForOrchestrator (Sprint 14 integration point)', () => {
+    it('claims the Task and creates a TaskExecution without enqueueing a background Job', async () => {
+      setupEligibleMocks();
+      prisma.project.findUniqueOrThrow.mockResolvedValue(buildProject());
+      prisma.task.findUniqueOrThrow.mockResolvedValue(buildTaskRow());
+      prisma.taskExecution.create.mockResolvedValue(buildExecutionRow());
+
+      const record = await service.beginForOrchestrator('project-1', 'task-1');
+
+      expect(prisma.task.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            id: 'task-1',
+            status: { in: [TaskStatus.PENDING, TaskStatus.READY] },
+          },
+          data: { status: TaskStatus.RUNNING },
+        }),
+      );
+      expect(jobService.enqueue).not.toHaveBeenCalled();
+      expect(record.id).toBe('exec-1');
+    });
+
+    it('rejects when the Task is not eligible, without ever touching the lock', async () => {
+      setupEligibleMocks();
+      prisma.project.findUniqueOrThrow.mockResolvedValue(buildProject());
+      prisma.task.findFirst.mockResolvedValue(
+        buildTaskWithDeps({ status: TaskStatus.PASSED }),
+      );
+
+      await expect(
+        service.beginForOrchestrator('project-1', 'task-1'),
+      ).rejects.toBeInstanceOf(Error);
+      expect(prisma.task.updateMany).not.toHaveBeenCalled();
     });
   });
 

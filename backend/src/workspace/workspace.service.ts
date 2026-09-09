@@ -426,6 +426,22 @@ export class WorkspaceService {
       );
     }
 
+    // Reads the sprintExecution table directly (same precedent as the
+    // projectId/archivedAt checks above and ApprovalService's direct reads
+    // of sibling artifact tables) — never pull the workspace directory out
+    // from under a live autonomous Sprint execution (item 136).
+    const activeSprintExecution = await this.prisma.sprintExecution.findFirst({
+      where: {
+        projectId: project.id,
+        status: { in: ['QUEUED', 'RUNNING', 'PAUSED', 'BLOCKED'] },
+      },
+    });
+    if (activeSprintExecution) {
+      throw new ConflictException(
+        'Cannot clean up the workspace while a Sprint execution is active. Cancel it first.',
+      );
+    }
+
     if (
       workspace.workspacePath &&
       (await this.paths.exists(workspace.workspacePath))

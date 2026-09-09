@@ -101,6 +101,7 @@ describe('TaskValidationService', () => {
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
       sprintPlan: { findFirst: jest.fn() },
+      project: { findUniqueOrThrow: jest.fn() },
       projectWorkspace: { findUnique: jest.fn() },
       taskExecution: {
         findFirst: jest.fn(),
@@ -445,6 +446,39 @@ describe('TaskValidationService', () => {
       );
       expect(prisma.task.update).not.toHaveBeenCalled();
       expect(prisma.task.updateMany).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('beginForOrchestrator (Sprint 14 integration point)', () => {
+    it('claims a ValidationAttempt without enqueueing a background Job', async () => {
+      setupEligibleMocks();
+      prisma.project.findUniqueOrThrow.mockResolvedValue(buildProject());
+      prisma.taskExecution.findFirstOrThrow.mockResolvedValue(buildExecution());
+      prisma.validationAttempt.create.mockResolvedValue(buildAttempt());
+
+      const record = await service.beginForOrchestrator('project-1', 'task-1');
+
+      expect(prisma.validationAttempt.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            attempt: 1,
+            taskExecutionId: 'exec-1',
+          }),
+        }),
+      );
+      expect(jobService.enqueue).not.toHaveBeenCalled();
+      expect(record.id).toBe('attempt-1');
+    });
+
+    it('rejects when not eligible', async () => {
+      setupEligibleMocks();
+      prisma.project.findUniqueOrThrow.mockResolvedValue(buildProject());
+      prisma.task.findFirst.mockResolvedValue(buildTask({ status: 'PENDING' }));
+
+      await expect(
+        service.beginForOrchestrator('project-1', 'task-1'),
+      ).rejects.toBeInstanceOf(Error);
+      expect(prisma.validationAttempt.create).not.toHaveBeenCalled();
     });
   });
 

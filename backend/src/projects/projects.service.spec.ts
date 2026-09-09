@@ -35,6 +35,9 @@ describe('ProjectsService', () => {
     projectWorkspace: {
       findUnique: jest.Mock;
     };
+    sprintExecution: {
+      findFirst: jest.Mock;
+    };
   };
   let config: { get: jest.Mock };
   let service: ProjectsService;
@@ -51,6 +54,7 @@ describe('ProjectsService', () => {
       projectWorkspace: {
         findUnique: jest.fn(),
       },
+      sprintExecution: { findFirst: jest.fn().mockResolvedValue(null) },
     };
     config = { get: jest.fn() };
     service = new ProjectsService(
@@ -305,6 +309,18 @@ describe('ProjectsService', () => {
 
       expect(result.archivedAt).toBeNull();
     });
+
+    it('blocks archiving while a Sprint execution is active', async () => {
+      prisma.project.findFirst.mockResolvedValue(
+        buildProject({ archivedAt: null }),
+      );
+      prisma.sprintExecution.findFirst.mockResolvedValue({ id: 'exec-1' });
+
+      await expect(
+        service.archive('user-1', 'project-1'),
+      ).rejects.toBeInstanceOf(Error);
+      expect(prisma.project.update).not.toHaveBeenCalled();
+    });
   });
 
   describe('remove', () => {
@@ -319,6 +335,16 @@ describe('ProjectsService', () => {
         where: { id: 'project-1' },
       });
       expect(result).toEqual({ success: true });
+    });
+
+    it('blocks deleting while a Sprint execution is active', async () => {
+      prisma.project.findFirst.mockResolvedValue(buildProject());
+      prisma.sprintExecution.findFirst.mockResolvedValue({ id: 'exec-1' });
+
+      await expect(
+        service.remove('user-1', 'project-1'),
+      ).rejects.toBeInstanceOf(Error);
+      expect(prisma.project.delete).not.toHaveBeenCalled();
     });
 
     it('succeeds even if best-effort workspace cleanup fails', async () => {

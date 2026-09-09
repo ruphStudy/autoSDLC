@@ -122,6 +122,7 @@ enum JobType {
   CODING_AGENT_EXECUTION
   TASK_EXECUTION
   TASK_VALIDATION
+  SPRINT_EXECUTION
 }
 
 enum JobStatus {
@@ -173,6 +174,7 @@ model Project {
   taskInstructions   TaskInstruction[]
   taskExecutions     TaskExecution[]
   validationAttempts ValidationAttempt[]
+  sprintExecutions   SprintExecution[]
 
   @@index([userId, archivedAt])
   @@map("projects")
@@ -359,6 +361,8 @@ model Sprint {
   // "This sprint depends on ..." / "... sprints that depend on this one".
   dependencies SprintDependency[] @relation("SprintDependencies")
   dependents   SprintDependency[] @relation("SprintDependents")
+
+  executions SprintExecution[]
 
   @@unique([sprintPlanId, number])
   @@index([sprintPlanId, order])
@@ -944,4 +948,78 @@ model ValidationRun {
   @@index([status])
   @@index([createdAt])
   @@map("validation_runs")
+}
+
+// Orchestration status for one autonomous Sprint-execution attempt —
+// deliberately its own status vocabulary, never reusing SprintStatus
+// (PENDING/RUNNING/TESTING/PASSED/FAILED/BLOCKED), which remains the
+// Sprint's own domain lifecycle. QUEUED/RUNNING/PAUSED are the only
+// non-terminal values.
+enum SprintExecutionStatus {
+  QUEUED
+  RUNNING
+  PAUSED
+  COMPLETED
+  FAILED
+  BLOCKED
+  CANCELLED
+}
+
+// One row per autonomous multi-Task Sprint-execution attempt. Orchestrates
+// (never duplicates) Sprint 12's TaskExecutionService and Sprint 13's
+// TaskValidationService — this model only tracks progress/outcome across
+// the whole Sprint, not any individual Task's own execution/validation
+// detail (those remain on TaskExecution/ValidationAttempt exactly as
+// Sprint 12/13 left them).
+model SprintExecution {
+  id        String  @id @default(uuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sprintId  String
+  sprint    Sprint  @relation(fields: [sprintId], references: [id], onDelete: Cascade)
+
+  // The exact SprintPlan version being executed, pinned at start — plan
+  // regeneration mid-execution must never silently change the Task graph
+  // this execution is iterating over (item 84/85). Enforced structurally:
+  // every Task lookup in the orchestration loop is scoped to this id.
+  sprintPlanId String
+
+  attempt Int
+  status  SprintExecutionStatus @default(QUEUED)
+
+  // Set by the currently (or most recently) selected Task — cleared once
+  // the Sprint reaches a terminal state.
+  currentTaskId String?
+
+  // Checked once per loop iteration, at the Task-boundary only (item 90) —
+  // never interrupts an in-flight Task execution/validation.
+  pauseRequested Boolean @default(false)
+
+  totalTasks   Int @default(0)
+  passedTasks  Int @default(0)
+  failedTasks  Int @default(0)
+  blockedTasks Int @default(0)
+
+  // Provenance chain: Sprint start HEAD -> (one commit per passed Task,
+  // already recorded individually on each TaskExecution) -> Sprint final
+  // HEAD (item 51-54).
+  repositoryStartSha String?
+  repositoryEndSha   String?
+
+  backgroundJobId String? @unique
+
+  errorCode    String?
+  errorMessage String?
+
+  startedAt   DateTime?
+  completedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([sprintId, attempt])
+  @@index([projectId, createdAt])
+  @@index([sprintId])
+  @@index([status])
+  @@map("sprint_executions")
 }

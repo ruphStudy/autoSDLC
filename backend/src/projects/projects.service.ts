@@ -44,6 +44,30 @@ export class ProjectsService {
     return project;
   }
 
+  // Reads the sprintExecution table directly via the already-injected
+  // PrismaService rather than importing SprintExecutionModule (same
+  // precedent as the projectWorkspace check below and ApprovalService
+  // reading ProjectAnalysis/Architecture/SprintPlan directly) — archiving
+  // or permanently deleting a project out from under a live autonomous
+  // Sprint execution would pull the workspace directory (and, for delete,
+  // the Project row itself) out from under a running coding agent (item
+  // 134/135).
+  private async assertNoActiveSprintExecution(
+    projectId: string,
+  ): Promise<void> {
+    const active = await this.prisma.sprintExecution.findFirst({
+      where: {
+        projectId,
+        status: { in: ['QUEUED', 'RUNNING', 'PAUSED', 'BLOCKED'] },
+      },
+    });
+    if (active) {
+      throw new ConflictException(
+        'Cannot archive or delete this project while a Sprint execution is active. Cancel it first.',
+      );
+    }
+  }
+
   async create(userId: string, dto: CreateProjectDto): Promise<Project> {
     const repositoryType = dto.repositoryType ?? RepositoryType.NEW;
 
@@ -140,6 +164,7 @@ export class ProjectsService {
     if (existing.archivedAt) {
       return existing;
     }
+    await this.assertNoActiveSprintExecution(existing.id);
 
     const project = await this.prisma.project.update({
       where: { id: existing.id },
@@ -167,6 +192,7 @@ export class ProjectsService {
 
   async remove(userId: string, id: string): Promise<{ success: true }> {
     const existing = await this.findOwnedProjectOrThrow(userId, id);
+    await this.assertNoActiveSprintExecution(existing.id);
     await this.prisma.project.delete({ where: { id: existing.id } });
 
     this.logger.log(`Project deleted (id=${existing.id}, userId=${userId})`);

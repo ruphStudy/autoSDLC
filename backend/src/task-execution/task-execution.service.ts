@@ -213,7 +213,80 @@ export class TaskExecutionService {
       userId,
       projectId,
     );
+    const execution = await this.claimTaskExecution(project, taskId);
 
+    try {
+      const job = await this.jobService.enqueue({
+        type: JobType.TASK_EXECUTION,
+        projectId: project.id,
+        userId,
+        // IDs only — never the instruction text, source code, or
+        // workspace path (item 87).
+        payload: {
+          taskExecutionId: execution.id,
+          taskId,
+          projectId: project.id,
+        },
+        maxAttempts: 1,
+      });
+      const updated = await this.prisma.taskExecution.update({
+        where: { id: execution.id },
+        data: { backgroundJobId: job.id },
+      });
+      this.logger.log(
+        `Task execution enqueued (taskExecutionId=${execution.id}, taskId=${taskId}, attempt=${execution.attempt})`,
+      );
+      const refreshedTask = await this.prisma.task.findUniqueOrThrow({
+        where: { id: taskId },
+        select: { id: true, status: true },
+      });
+      return { taskExecution: toRecord(updated), job, task: refreshedTask };
+    } catch (error) {
+      // Never strand a TaskExecution/Task in RUNNING if enqueueing itself
+      // failed — no execution has actually started yet.
+      await this.prisma.$transaction([
+        this.prisma.taskExecution.update({
+          where: { id: execution.id },
+          data: {
+            status: TaskExecutionStatus.FAILED,
+            errorCode: TaskExecutionErrorCode.ENQUEUE_FAILED,
+            errorMessage: 'Failed to enqueue the background execution job.',
+            completedAt: new Date(),
+          },
+        }),
+        this.prisma.task.updateMany({
+          where: { id: taskId, status: TaskStatus.RUNNING },
+          data: { status: execution.priorTaskStatus ?? TaskStatus.READY },
+        }),
+      ]);
+      throw error;
+    }
+  }
+
+  // Sprint 14 integration point: same eligibility + atomic-lock + Task/
+  // Sprint/Project status transitions as run(), but never enqueues a
+  // TASK_EXECUTION background Job — the caller (SprintExecutionService) is
+  // expected to invoke execute() directly with its own JobExecutionContext,
+  // exactly mirroring how execute() itself already reuses
+  // CodingAgentService.execute() in-process rather than through a nested
+  // queue. No ownership/userId check by design — trusted internal
+  // orchestration code only (same reasoning as
+  // TaskInstructionService.getOrGenerateFreshInstruction).
+  async beginForOrchestrator(
+    projectId: string,
+    taskId: string,
+  ): Promise<TaskExecutionRecord> {
+    const project = await this.prisma.project.findUniqueOrThrow({
+      where: { id: projectId },
+    });
+    const execution = await this.claimTaskExecution(project, taskId);
+    return toRecord(execution);
+  }
+
+  private async claimTaskExecution(
+    project: Project,
+    taskId: string,
+  ): Promise<TaskExecution> {
     const eligibility = await this.evaluateEligibility(project, taskId);
     if (!eligibility.runnable) {
       throw mapTaskExecutionErrorToHttpException(
@@ -228,11 +301,10 @@ export class TaskExecutionService {
       where: { id: taskId },
     });
 
-    let execution: TaskExecution;
     try {
-      execution = await this.prisma.$transaction(async (tx) => {
-        // Atomic claim: only one concurrent run() call for this Task can
-        // ever see count === 1 here.
+      return await this.prisma.$transaction(async (tx) => {
+        // Atomic claim: only one concurrent claim for this Task can ever
+        // see count === 1 here.
         const claim = await tx.task.updateMany({
           where: {
             id: taskId,
@@ -286,53 +358,6 @@ export class TaskExecutionService {
       if (error instanceof TaskExecutionError) {
         throw mapTaskExecutionErrorToHttpException(error);
       }
-      throw error;
-    }
-
-    try {
-      const job = await this.jobService.enqueue({
-        type: JobType.TASK_EXECUTION,
-        projectId: project.id,
-        userId,
-        // IDs only — never the instruction text, source code, or
-        // workspace path (item 87).
-        payload: {
-          taskExecutionId: execution.id,
-          taskId,
-          projectId: project.id,
-        },
-        maxAttempts: 1,
-      });
-      const updated = await this.prisma.taskExecution.update({
-        where: { id: execution.id },
-        data: { backgroundJobId: job.id },
-      });
-      this.logger.log(
-        `Task execution enqueued (taskExecutionId=${execution.id}, taskId=${taskId}, attempt=${execution.attempt})`,
-      );
-      const refreshedTask = await this.prisma.task.findUniqueOrThrow({
-        where: { id: taskId },
-        select: { id: true, status: true },
-      });
-      return { taskExecution: toRecord(updated), job, task: refreshedTask };
-    } catch (error) {
-      // Never strand a TaskExecution/Task in RUNNING if enqueueing itself
-      // failed — no execution has actually started yet.
-      await this.prisma.$transaction([
-        this.prisma.taskExecution.update({
-          where: { id: execution.id },
-          data: {
-            status: TaskExecutionStatus.FAILED,
-            errorCode: TaskExecutionErrorCode.ENQUEUE_FAILED,
-            errorMessage: 'Failed to enqueue the background execution job.',
-            completedAt: new Date(),
-          },
-        }),
-        this.prisma.task.updateMany({
-          where: { id: taskId, status: TaskStatus.RUNNING },
-          data: { status: execution.priorTaskStatus ?? TaskStatus.READY },
-        }),
-      ]);
       throw error;
     }
   }

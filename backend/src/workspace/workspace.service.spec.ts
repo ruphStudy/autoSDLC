@@ -62,6 +62,7 @@ describe('WorkspaceService', () => {
         updateMany: jest.fn(),
         findUniqueOrThrow: jest.fn(),
       },
+      sprintExecution: { findFirst: jest.fn().mockResolvedValue(null) },
     };
     projectsService = { findOneForUser: jest.fn() };
     approvalService = { assertDevelopmentApproved: jest.fn() };
@@ -511,6 +512,21 @@ describe('WorkspaceService', () => {
       prisma.projectWorkspace.findUnique.mockResolvedValue(
         buildWorkspace({ status: WorkspaceStatus.PREPARING }),
       );
+
+      await expect(
+        service.cleanup('user-1', 'project-1'),
+      ).rejects.toBeInstanceOf(ConflictException);
+    });
+
+    it('rejects cleanup while a Sprint execution is active', async () => {
+      projectsService.findOneForUser.mockResolvedValue(buildProject());
+      prisma.projectWorkspace.findUnique.mockResolvedValue(
+        buildWorkspace({
+          status: WorkspaceStatus.READY,
+          workspacePath: '/workspaces/project-1',
+        }),
+      );
+      prisma.sprintExecution.findFirst.mockResolvedValue({ id: 'exec-1' });
 
       await expect(
         service.cleanup('user-1', 'project-1'),

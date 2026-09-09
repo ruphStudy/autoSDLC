@@ -16,6 +16,7 @@ import { CodingAgentModule } from './coding-agent/coding-agent.module';
 import { TaskInstructionModule } from './task-instruction/task-instruction.module';
 import { TaskExecutionModule } from './task-execution/task-execution.module';
 import { TaskValidationModule } from './task-validation/task-validation.module';
+import { SprintExecutionModule } from './sprint-execution/sprint-execution.module';
 import { envValidationSchema } from './config/env.validation';
 
 @Module({
@@ -38,6 +39,7 @@ import { envValidationSchema } from './config/env.validation';
     TaskInstructionModule,
     TaskExecutionModule,
     TaskValidationModule,
+    SprintExecutionModule,
   ],
   controllers: [AppController],
   providers: [AppService],

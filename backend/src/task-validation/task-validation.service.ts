@@ -302,55 +302,7 @@ export class TaskValidationService {
       userId,
       projectId,
     );
-
-    const eligibility = await this.evaluateEligibility(project, taskId);
-    if (!eligibility.runnable) {
-      throw mapTaskValidationErrorToHttpException(
-        new TaskValidationError({
-          code: eligibility.reasons[0],
-          message: `This Task cannot be validated right now: ${eligibility.reasons.join(', ')}.`,
-        }),
-      );
-    }
-
-    const latestExecution = await this.prisma.taskExecution.findFirstOrThrow({
-      where: { taskId },
-      orderBy: { attempt: 'desc' },
-    });
-
-    let attempt: ValidationAttempt;
-    try {
-      attempt = await this.prisma.$transaction(async (tx) => {
-        const active = await tx.validationAttempt.findFirst({
-          where: { taskId, status: { in: ACTIVE_ATTEMPT_STATUSES } },
-        });
-        if (active) {
-          throw new TaskValidationError({
-            code: TaskValidationErrorCode.ACTIVE_VALIDATION,
-            message: 'A validation is already in progress for this Task.',
-          });
-        }
-        const aggregate = await tx.validationAttempt.aggregate({
-          where: { taskId },
-          _max: { attempt: true },
-        });
-        const nextAttempt = (aggregate._max.attempt ?? 0) + 1;
-        return tx.validationAttempt.create({
-          data: {
-            projectId: project.id,
-            taskId,
-            taskExecutionId: latestExecution.id,
-            attempt: nextAttempt,
-            status: ValidationAttemptStatus.QUEUED,
-          },
-        });
-      });
-    } catch (error) {
-      if (error instanceof TaskValidationError) {
-        throw mapTaskValidationErrorToHttpException(error);
-      }
-      throw error;
-    }
+    const attempt = await this.claimValidationAttempt(project, taskId);
 
     try {
       const job = await this.jobService.enqueue({
@@ -382,6 +334,76 @@ export class TaskValidationService {
           completedAt: new Date(),
         },
       });
+      throw error;
+    }
+  }
+
+  // Sprint 14 integration point: same eligibility + atomic-lock logic as
+  // validate(), but never enqueues a TASK_VALIDATION background Job — the
+  // caller (SprintExecutionService) is expected to invoke execute()
+  // directly with its own JobExecutionContext, mirroring
+  // TaskExecutionService.beginForOrchestrator. No ownership/userId check by
+  // design — trusted internal orchestration code only.
+  async beginForOrchestrator(
+    projectId: string,
+    taskId: string,
+  ): Promise<ValidationAttemptRecord> {
+    const project = await this.prisma.project.findUniqueOrThrow({
+      where: { id: projectId },
+    });
+    const attempt = await this.claimValidationAttempt(project, taskId);
+    return toAttemptRecord(attempt, []);
+  }
+
+  private async claimValidationAttempt(
+    project: Project,
+    taskId: string,
+  ): Promise<ValidationAttempt> {
+    const eligibility = await this.evaluateEligibility(project, taskId);
+    if (!eligibility.runnable) {
+      throw mapTaskValidationErrorToHttpException(
+        new TaskValidationError({
+          code: eligibility.reasons[0],
+          message: `This Task cannot be validated right now: ${eligibility.reasons.join(', ')}.`,
+        }),
+      );
+    }
+
+    const latestExecution = await this.prisma.taskExecution.findFirstOrThrow({
+      where: { taskId: taskId },
+      orderBy: { attempt: 'desc' },
+    });
+
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const active = await tx.validationAttempt.findFirst({
+          where: { taskId, status: { in: ACTIVE_ATTEMPT_STATUSES } },
+        });
+        if (active) {
+          throw new TaskValidationError({
+            code: TaskValidationErrorCode.ACTIVE_VALIDATION,
+            message: 'A validation is already in progress for this Task.',
+          });
+        }
+        const aggregate = await tx.validationAttempt.aggregate({
+          where: { taskId },
+          _max: { attempt: true },
+        });
+        const nextAttempt = (aggregate._max.attempt ?? 0) + 1;
+        return tx.validationAttempt.create({
+          data: {
+            projectId: project.id,
+            taskId,
+            taskExecutionId: latestExecution.id,
+            attempt: nextAttempt,
+            status: ValidationAttemptStatus.QUEUED,
+          },
+        });
+      });
+    } catch (error) {
+      if (error instanceof TaskValidationError) {
+        throw mapTaskValidationErrorToHttpException(error);
+      }
       throw error;
     }
   }
