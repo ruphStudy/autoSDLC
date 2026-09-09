@@ -1,5 +1,6 @@
 import type { SprintPlan, Task } from './types';
 import { TaskInstructionPreview } from '../task-instruction/TaskInstructionPreview';
+import { TaskExecutionPanel } from '../task-execution/TaskExecutionPanel';
 
 function Chips({ items }: { items: string[] }) {
   if (items.length === 0) return null;
@@ -12,7 +13,17 @@ function Chips({ items }: { items: string[] }) {
   );
 }
 
-function TaskCard({ task, projectId, canPreviewInstructions }: { task: Task; projectId: string; canPreviewInstructions: boolean }) {
+function TaskCard({
+  task,
+  projectId,
+  canPreviewInstructions,
+  canRunTasks,
+}: {
+  task: Task;
+  projectId: string;
+  canPreviewInstructions: boolean;
+  canRunTasks: boolean;
+}) {
   return (
     <li className="analysis-card">
       <div className="analysis-card-header">
@@ -58,6 +69,9 @@ function TaskCard({ task, projectId, canPreviewInstructions }: { task: Task; pro
       )}
 
       {canPreviewInstructions && <TaskInstructionPreview projectId={projectId} taskId={task.id} />}
+      {canRunTasks && (
+        <TaskExecutionPanel projectId={projectId} taskId={task.id} taskStatus={task.status} />
+      )}
     </li>
   );
 }
@@ -65,6 +79,7 @@ function TaskCard({ task, projectId, canPreviewInstructions }: { task: Task; pro
 export function SprintPlanContentView({
   plan,
   canPreviewInstructions = false,
+  canRunTasks = false,
 }: {
   plan: SprintPlan;
   // Only meaningful on the current plan page — a historical version's Tasks
@@ -72,6 +87,9 @@ export function SprintPlanContentView({
   // for them (see TASK_NOT_IN_CURRENT_PLAN), so SprintPlanVersionPage leaves
   // this false.
   canPreviewInstructions?: boolean;
+  // Same reasoning as canPreviewInstructions — a Task execution also
+  // requires the Task to belong to the current Sprint Plan.
+  canRunTasks?: boolean;
 }) {
   return (
     <div className="analysis-content">
@@ -114,6 +132,7 @@ export function SprintPlanContentView({
                     task={task}
                     projectId={plan.projectId}
                     canPreviewInstructions={canPreviewInstructions}
+                    canRunTasks={canRunTasks}
                   />
                 ))}
             </ul>

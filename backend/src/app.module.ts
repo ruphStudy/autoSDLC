@@ -14,6 +14,7 @@ import { JobsModule } from './jobs/jobs.module';
 import { WorkspaceModule } from './workspace/workspace.module';
 import { CodingAgentModule } from './coding-agent/coding-agent.module';
 import { TaskInstructionModule } from './task-instruction/task-instruction.module';
+import { TaskExecutionModule } from './task-execution/task-execution.module';
 import { envValidationSchema } from './config/env.validation';
 
 @Module({
@@ -34,6 +35,7 @@ import { envValidationSchema } from './config/env.validation';
     WorkspaceModule,
     CodingAgentModule,
     TaskInstructionModule,
+    TaskExecutionModule,
   ],
   controllers: [AppController],
   providers: [AppService],

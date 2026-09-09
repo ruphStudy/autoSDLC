@@ -57,6 +57,9 @@ const codingAgentProviderFactory: Provider = {
     CodingAgentService,
     CodingAgentExecutionJobHandler,
   ],
-  exports: [CODING_AGENT_PROVIDER],
+  // CodingAgentService is exported (in addition to the provider token) so
+  // Sprint 12's TaskExecutionModule can reuse its execute()/AgentJob
+  // orchestration directly rather than duplicating it.
+  exports: [CODING_AGENT_PROVIDER, CodingAgentService],
 })
 export class CodingAgentModule {}

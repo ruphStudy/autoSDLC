@@ -106,11 +106,21 @@ enum TaskStatus {
 // Deliberately narrow for Sprint 8: only infrastructure/test-safe types.
 // Future sprints add their own real work types here (and register a
 // handler for each) — this enum is not meant to anticipate them.
+enum TaskExecutionStatus {
+  QUEUED
+  RUNNING
+  AGENT_COMPLETED
+  READY_FOR_VALIDATION
+  FAILED
+  CANCELLED
+}
+
 enum JobType {
   SYSTEM_TEST
   PROJECT_PREPARATION
   WORKSPACE_PREPARE
   CODING_AGENT_EXECUTION
+  TASK_EXECUTION
 }
 
 enum JobStatus {
@@ -160,6 +170,7 @@ model Project {
   workspace        ProjectWorkspace?
   agentJobs        AgentJob[]
   taskInstructions TaskInstruction[]
+  taskExecutions   TaskExecution[]
 
   @@index([userId, archivedAt])
   @@map("projects")
@@ -399,6 +410,7 @@ model Task {
   dependents   TaskDependency[]  @relation("TaskDependents")
   agentJobs    AgentJob[]
   instructions TaskInstruction[]
+  executions   TaskExecution[]
 
   @@unique([sprintPlanId, key])
   @@index([sprintId, order])
@@ -739,4 +751,64 @@ model TaskInstruction {
   @@index([projectId, createdAt])
   @@index([taskId, createdAt])
   @@map("task_instructions")
+}
+
+// One row per orchestrated Sprint 12 execution *attempt* for a Task —
+// distinct from AgentJob, which is one coding-provider invocation.
+// TaskExecution owns the orchestration-level outcome (Task status
+// transition, Git before/after state); AgentJob (referenced below by a
+// plain id, not a Prisma relation, matching AgentJob.backgroundJobId's own
+// cross-domain-reference style) owns the provider-specific detail.
+model TaskExecution {
+  id        String  @id @default(uuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  taskId    String
+  task      Task    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  // Sequential per-Task attempt counter — never reused, never decremented.
+  attempt Int
+
+  status TaskExecutionStatus @default(QUEUED)
+
+  // The Task's status immediately before this execution locked it into
+  // RUNNING (always PENDING or READY) — restored verbatim if this execution
+  // fails before the coding agent ever starts, or is cancelled with no
+  // resulting file changes.
+  priorTaskStatus TaskStatus?
+
+  // Cross-domain references by id only (see AgentJob.backgroundJobId for
+  // the same pattern) — TaskInstruction/AgentJob/Job each own their own
+  // lifecycle; TaskExecution only needs to remember which ones it used.
+  taskInstructionId String?
+  agentJobId        String? @unique
+  backgroundJobId   String? @unique
+
+  repositoryStartSha String?
+  repositoryEndSha   String?
+
+  // CodingAgentChangedFile[]-shaped, bounded — derived from a real `git
+  // status` after execution, never from the provider's own narrative.
+  changedFiles Json?
+
+  // Bounded unstaged diff (see TaskExecutionConfigService) — truncated
+  // rather than omitted so partial evidence always survives a failure.
+  gitDiff          String?
+  gitDiffTruncated Boolean @default(false)
+
+  errorCode    String?
+  errorMessage String?
+
+  startedAt   DateTime?
+  completedAt DateTime?
+  durationMs  Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([taskId, attempt])
+  @@index([projectId, createdAt])
+  @@index([taskId])
+  @@index([status])
+  @@map("task_executions")
 }

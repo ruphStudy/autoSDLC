@@ -84,8 +84,8 @@ export function StartDevelopmentPanel({ projectId }: { projectId: string }) {
 
       {alreadyApproved && (
         <p className="approval-panel-meta">
-          Development execution is not implemented yet — this project is ready and waiting for a
-          future execution sprint.
+          Development is approved. Use "Run Task" on an individual Task in the Sprint Plan above
+          to execute it.
         </p>
       )}
     </section>

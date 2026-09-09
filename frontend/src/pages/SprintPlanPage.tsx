@@ -193,7 +193,7 @@ export function SprintPlanPage() {
             plan={plan}
             architectureVersion={architectureVersionFor(plan.architectureId)}
           />
-          <SprintPlanContentView plan={plan} canPreviewInstructions />
+          <SprintPlanContentView plan={plan} canPreviewInstructions canRunTasks />
 
           {versions.length > 1 && (
             <section className="analysis-section">

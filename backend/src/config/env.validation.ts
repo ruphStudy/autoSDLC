@@ -85,4 +85,11 @@ export const envValidationSchema = Joi.object({
   TASK_CONTEXT_MAX_TOTAL_BYTES: Joi.number().integer().min(1).default(300000),
   TASK_CONTEXT_RECENT_COMMITS: Joi.number().integer().min(0).default(10),
   TASK_INSTRUCTION_MAX_CHARS: Joi.number().integer().min(1000).default(50000),
+
+  // Single Task Orchestrator (Sprint 12) — bounds how much of a Git diff is
+  // persisted per execution attempt. See TaskExecutionConfigService.
+  TASK_EXECUTION_MAX_DIFF_CHARS: Joi.number()
+    .integer()
+    .min(1000)
+    .default(200000),
 });
