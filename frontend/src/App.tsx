@@ -17,6 +17,7 @@ import { ArchitectureVersionPage } from './pages/ArchitectureVersionPage';
 import { SprintPlanPage } from './pages/SprintPlanPage';
 import { EditSprintPlanPage } from './pages/EditSprintPlanPage';
 import { SprintPlanVersionPage } from './pages/SprintPlanVersionPage';
+import { DevelopmentPage } from './pages/DevelopmentPage';
 
 export function App() {
   return (
@@ -54,6 +55,7 @@ export function App() {
           path="projects/:id/sprint-plan/versions/:version"
           element={<SprintPlanVersionPage />}
         />
+        <Route path="projects/:id/development" element={<DevelopmentPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

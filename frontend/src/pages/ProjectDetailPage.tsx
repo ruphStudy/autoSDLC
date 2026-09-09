@@ -196,18 +196,19 @@ export function ProjectDetailPage() {
             </button>
           )}
 
-          <button
-            type="button"
-            disabled
-            title={
-              summary?.startDevelopment.decision === 'APPROVED'
-                ? 'Approved — execution engine not started yet'
-                : 'Locked until the Sprint Plan and Start Development are approved'
-            }
-          >
-            Development
-            {summary?.startDevelopment.decision === 'APPROVED' && ' — Approved'}
-          </button>
+          {summary?.startDevelopment.decision === 'APPROVED' ? (
+            <Link to={`/projects/${project.id}/development`} className="stage-nav-link">
+              Development
+            </Link>
+          ) : (
+            <button
+              type="button"
+              disabled
+              title="Locked until the Sprint Plan and Start Development are approved"
+            >
+              Development
+            </button>
+          )}
         </div>
       </section>
 
