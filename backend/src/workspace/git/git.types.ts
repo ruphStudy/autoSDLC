@@ -45,3 +45,8 @@ export interface RepositoryReadiness {
   remoteConfigured: boolean;
   issues: string[];
 }
+
+export interface CommitSummary {
+  sha: string;
+  message: string;
+}

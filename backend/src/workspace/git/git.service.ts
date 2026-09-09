@@ -6,6 +6,7 @@ import { redactGitUrl } from './git-url.util';
 import {
   ChangedFile,
   ChangedFileStatus,
+  CommitSummary,
   GitCommandResult,
   GitDiffResult,
   GitStatusResult,
@@ -263,6 +264,28 @@ export class GitService {
     const result = await this.run(['rev-parse', 'HEAD'], { cwd });
     if (result.exitCode !== 0) return null;
     return result.stdout.trim();
+  }
+
+  // Bounded, oldest-safe recent history — used by Sprint 11's task-context
+  // builder to give the planning model a sense of recent implementation
+  // activity without sending the full Git history. Returns [] (not an
+  // error) when the repository has no commits yet or `count` is 0.
+  async getRecentCommits(cwd: string, count: number): Promise<CommitSummary[]> {
+    if (count <= 0) return [];
+    // \x1f (unit separator) can't appear in a commit subject, so it's a
+    // safe delimiter regardless of what characters the message itself uses.
+    const result = await this.run(
+      ['log', `-n`, String(count), '--pretty=format:%H%x1f%s'],
+      { cwd },
+    );
+    if (result.exitCode !== 0 || !result.stdout.trim()) return [];
+    return result.stdout
+      .split('\n')
+      .filter((line) => line.length > 0)
+      .map((line) => {
+        const [sha, ...rest] = line.split('\x1f');
+        return { sha, message: rest.join('\x1f') };
+      });
   }
 
   async getRemoteInfo(

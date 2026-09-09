@@ -139,26 +139,27 @@ enum JobEventType {
 // architecture, sprint planning, execution) hang their own models off this
 // via `projectId` rather than growing this table with their JSON output.
 model Project {
-  id             String            @id @default(uuid())
-  userId         String
-  user           User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  name           String
-  description    String?
-  brief          String
-  preferredStack String?
-  repositoryType RepositoryType    @default(NEW)
-  repositoryUrl  String?
-  status         ProjectStatus     @default(DRAFT)
-  archivedAt     DateTime?
-  createdAt      DateTime          @default(now())
-  updatedAt      DateTime          @updatedAt
-  analyses       ProjectAnalysis[]
-  architectures  Architecture[]
-  sprintPlans    SprintPlan[]
-  approvals      Approval[]
-  jobs           Job[]
-  workspace      ProjectWorkspace?
-  agentJobs      AgentJob[]
+  id               String            @id @default(uuid())
+  userId           String
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name             String
+  description      String?
+  brief            String
+  preferredStack   String?
+  repositoryType   RepositoryType    @default(NEW)
+  repositoryUrl    String?
+  status           ProjectStatus     @default(DRAFT)
+  archivedAt       DateTime?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  analyses         ProjectAnalysis[]
+  architectures    Architecture[]
+  sprintPlans      SprintPlan[]
+  approvals        Approval[]
+  jobs             Job[]
+  workspace        ProjectWorkspace?
+  agentJobs        AgentJob[]
+  taskInstructions TaskInstruction[]
 
   @@index([userId, archivedAt])
   @@map("projects")
@@ -394,9 +395,10 @@ model Task {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  dependencies TaskDependency[] @relation("TaskDependencies")
-  dependents   TaskDependency[] @relation("TaskDependents")
+  dependencies TaskDependency[]  @relation("TaskDependencies")
+  dependents   TaskDependency[]  @relation("TaskDependents")
   agentJobs    AgentJob[]
+  instructions TaskInstruction[]
 
   @@unique([sprintPlanId, key])
   @@index([sprintId, order])
@@ -671,4 +673,70 @@ model AgentJob {
   @@index([taskId])
   @@index([status])
   @@map("agent_jobs")
+}
+
+// A generated, versioned execution artifact for one Task (Sprint 11) —
+// deliberately NOT a field on Task. Task is stable planning intent;
+// TaskInstruction is fresh, repository-aware execution context regenerated
+// immediately before each execution attempt (never during Sprint Planning,
+// never edited by hand — see TaskInstructionService). Append-only: a Task
+// retried later against a changed repository gets a new version, never an
+// overwrite, so past instructions stay auditable.
+model TaskInstruction {
+  id        String  @id @default(uuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  taskId    String
+  task      Task    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  version Int
+
+  // The Task's OWN artifact lineage at generation time — walked from
+  // Task.sprintPlanId, never independently "latest" versions (see
+  // TaskContextBuilder). Survives later regeneration of any of these.
+  sprintPlanId      String
+  architectureId    String
+  projectAnalysisId String
+
+  // Structured instruction contract (item 31) — kept alongside
+  // finalInstruction so the UI/debugging never has to reparse the prompt.
+  objective              String
+  repositoryObservations Json
+  implementationPlan     Json
+  constraints            Json
+  acceptanceCriteria     Json
+  validationPlan         Json
+  dependencyContext      Json
+  risksOrWatchouts       Json
+
+  // The single clean prompt CodingAgentProvider.executeTask ultimately
+  // receives as `instruction` — provider-neutral, no Claude-specific markup.
+  finalInstruction String
+
+  // Bounded audit metadata about what produced this instruction — never a
+  // raw file-content dump (see TaskContextBuilder / RepositoryTreeService).
+  contextSnapshot Json
+
+  // Exact repository state this instruction is valid for (item 6/55) —
+  // isInstructionCurrent() compares this against the live HEAD.
+  repositoryHeadSha String
+  repositoryBranch  String?
+
+  promptName        String
+  promptVersion     String
+  provider          String
+  model             String
+  inputTokens       Int?
+  outputTokens      Int?
+  totalTokens       Int?
+  latencyMs         Int
+  attempts          Int
+  providerRequestId String?
+
+  createdAt DateTime @default(now())
+
+  @@unique([taskId, version])
+  @@index([projectId, createdAt])
+  @@index([taskId, createdAt])
+  @@map("task_instructions")
 }

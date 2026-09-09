@@ -1,4 +1,5 @@
 import type { SprintPlan, Task } from './types';
+import { TaskInstructionPreview } from '../task-instruction/TaskInstructionPreview';
 
 function Chips({ items }: { items: string[] }) {
   if (items.length === 0) return null;
@@ -11,7 +12,7 @@ function Chips({ items }: { items: string[] }) {
   );
 }
 
-function TaskCard({ task }: { task: Task }) {
+function TaskCard({ task, projectId, canPreviewInstructions }: { task: Task; projectId: string; canPreviewInstructions: boolean }) {
   return (
     <li className="analysis-card">
       <div className="analysis-card-header">
@@ -55,11 +56,23 @@ function TaskCard({ task }: { task: Task }) {
           <Chips items={task.architectureAreas} />
         </>
       )}
+
+      {canPreviewInstructions && <TaskInstructionPreview projectId={projectId} taskId={task.id} />}
     </li>
   );
 }
 
-export function SprintPlanContentView({ plan }: { plan: SprintPlan }) {
+export function SprintPlanContentView({
+  plan,
+  canPreviewInstructions = false,
+}: {
+  plan: SprintPlan;
+  // Only meaningful on the current plan page — a historical version's Tasks
+  // belong to a superseded plan and can never have an instruction generated
+  // for them (see TASK_NOT_IN_CURRENT_PLAN), so SprintPlanVersionPage leaves
+  // this false.
+  canPreviewInstructions?: boolean;
+}) {
   return (
     <div className="analysis-content">
       <section className="analysis-section">
@@ -96,7 +109,12 @@ export function SprintPlanContentView({ plan }: { plan: SprintPlan }) {
                 .slice()
                 .sort((a, b) => a.order - b.order)
                 .map((task) => (
-                  <TaskCard key={task.id} task={task} />
+                  <TaskCard
+                    key={task.id}
+                    task={task}
+                    projectId={plan.projectId}
+                    canPreviewInstructions={canPreviewInstructions}
+                  />
                 ))}
             </ul>
           </section>

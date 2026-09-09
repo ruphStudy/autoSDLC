@@ -75,4 +75,14 @@ export const envValidationSchema = Joi.object({
     .max(3600000)
     .default(900000),
   CLAUDE_MAX_OUTPUT_BYTES: Joi.number().integer().min(1024).default(1048576),
+
+  // Task instruction generation (Sprint 11) — bounds on how much repository
+  // context is ever assembled for a single instruction-generation call. See
+  // RepositoryTreeService / TaskContextBuilder.
+  TASK_CONTEXT_MAX_TREE_ENTRIES: Joi.number().integer().min(1).default(1000),
+  TASK_CONTEXT_MAX_FILES: Joi.number().integer().min(1).default(20),
+  TASK_CONTEXT_MAX_FILE_BYTES: Joi.number().integer().min(1).default(50000),
+  TASK_CONTEXT_MAX_TOTAL_BYTES: Joi.number().integer().min(1).default(300000),
+  TASK_CONTEXT_RECENT_COMMITS: Joi.number().integer().min(0).default(10),
+  TASK_INSTRUCTION_MAX_CHARS: Joi.number().integer().min(1000).default(50000),
 });

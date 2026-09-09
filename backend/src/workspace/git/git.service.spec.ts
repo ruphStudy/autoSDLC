@@ -207,6 +207,37 @@ describe('GitService', () => {
     expect(await git.getRemoteInfo(cwd)).toBeNull();
   });
 
+  it('returns bounded recent commits, newest first', async () => {
+    const cwd = await freshDir();
+    await git.init(cwd, 'main');
+    await git.configureIdentity(cwd, 'Test Author', 'test@example.com');
+    await git.commit(cwd, 'chore: first commit', { allowEmpty: true });
+    await git.commit(cwd, 'feat: second commit', { allowEmpty: true });
+    const latestSha = await git.commit(cwd, 'feat: third commit', {
+      allowEmpty: true,
+    });
+
+    const commits = await git.getRecentCommits(cwd, 2);
+    expect(commits).toHaveLength(2);
+    expect(commits[0]).toEqual({
+      sha: latestSha,
+      message: 'feat: third commit',
+    });
+    expect(commits[1].message).toBe('feat: second commit');
+  });
+
+  it('returns an empty array for a repository with no commits', async () => {
+    const cwd = await freshDir();
+    await git.init(cwd, 'main');
+    expect(await git.getRecentCommits(cwd, 5)).toEqual([]);
+  });
+
+  it('returns an empty array when count is 0, without spawning git', async () => {
+    const cwd = await freshDir();
+    await git.init(cwd, 'main');
+    expect(await git.getRecentCommits(cwd, 0)).toEqual([]);
+  });
+
   it('redacts embedded credentials from a remote URL', async () => {
     const cwd = await freshDir();
     await git.init(cwd, 'main');
