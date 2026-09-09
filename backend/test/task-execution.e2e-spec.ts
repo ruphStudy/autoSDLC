@@ -24,7 +24,11 @@ function validAnalysisContent() {
     targetUsers: [{ name: 'Job seekers', description: 'Engineers', needs: [] }],
     goals: [{ title: 'Confidence', description: 'Feel prepared' }],
     features: [
-      { name: 'Mock interviews', description: 'AI-led sessions', priority: 'must_have' },
+      {
+        name: 'Mock interviews',
+        description: 'AI-led sessions',
+        priority: 'must_have',
+      },
     ],
     functionalRequirements: [
       {
@@ -39,8 +43,12 @@ function validAnalysisContent() {
     ],
     assumptions: [{ assumption: 'Users have a mic.' }],
     risks: [{ risk: 'Audio quality', severity: 'medium' }],
-    unresolvedQuestions: [{ question: 'Record sessions?', importance: 'medium' }],
-    integrations: [{ name: 'STT API', purpose: 'Transcription', required: true }],
+    unresolvedQuestions: [
+      { question: 'Record sessions?', importance: 'medium' },
+    ],
+    integrations: [
+      { name: 'STT API', purpose: 'Transcription', required: true },
+    ],
   };
 }
 
@@ -71,9 +79,15 @@ function validArchitectureContent() {
       framework: 'NestJS',
       language: 'TypeScript',
       architecturalStyle: 'Modular monolith',
-      modules: [{ name: 'interviews', responsibility: 'Manages interview sessions.' }],
+      modules: [
+        { name: 'interviews', responsibility: 'Manages interview sessions.' },
+      ],
     },
-    apiArchitecture: { style: 'REST', conventions: [], majorResourceGroups: [] },
+    apiArchitecture: {
+      style: 'REST',
+      conventions: [],
+      majorResourceGroups: [],
+    },
     databaseArchitecture: {
       databaseType: 'Relational',
       technology: 'PostgreSQL',
@@ -86,7 +100,9 @@ function validArchitectureContent() {
       authorizationModel: 'Owner-only access.',
     },
     integrationArchitecture: [],
-    infrastructureArchitecture: { runtimeComponents: ['API server', 'PostgreSQL'] },
+    infrastructureArchitecture: {
+      runtimeComponents: ['API server', 'PostgreSQL'],
+    },
     deploymentArchitecture: {
       environments: ['production'],
       deploymentStrategy: 'Single-region container deployment.',
@@ -94,7 +110,9 @@ function validArchitectureContent() {
       configurationStrategy: 'Environment variables.',
       secretsStrategy: 'Managed secret store.',
     },
-    securityArchitecture: { controls: [{ area: 'Auth', recommendation: 'bcrypt hashing.' }] },
+    securityArchitecture: {
+      controls: [{ area: 'Auth', recommendation: 'bcrypt hashing.' }],
+    },
     testingStrategy: {
       unitTesting: { approach: 'Jest' },
       integrationTesting: { approach: 'Supertest' },
@@ -153,7 +171,11 @@ function twoTaskSprintPlanContent() {
             dependencies: [],
             acceptanceCriteria: ['A session entity exists.'],
             validationExpectations: [
-              { type: 'unit_test', description: 'Unit tests pass.', required: true },
+              {
+                type: 'unit_test',
+                description: 'Unit tests pass.',
+                required: true,
+              },
             ],
             requirementIds: ['FR-001'],
             architectureAreas: ['backendArchitecture'],
@@ -165,7 +187,11 @@ function twoTaskSprintPlanContent() {
             dependencies: ['S1-T1'],
             acceptanceCriteria: ['A session can be started.'],
             validationExpectations: [
-              { type: 'unit_test', description: 'Unit tests pass.', required: true },
+              {
+                type: 'unit_test',
+                description: 'Unit tests pass.',
+                required: true,
+              },
             ],
             requirementIds: ['FR-001'],
             architectureAreas: ['backendArchitecture'],
@@ -196,7 +222,11 @@ function taskInstructionContent(overrides: Record<string, unknown> = {}) {
     objective: 'Implement the interview session entity.',
     repositoryObservations: ['This is a freshly initialized repository.'],
     implementationPlan: [
-      { step: 1, description: 'Add the InterviewSession entity.', likelyFiles: ['src/interviews/interview-session.entity.ts'] },
+      {
+        step: 1,
+        description: 'Add the InterviewSession entity.',
+        likelyFiles: ['src/interviews/interview-session.entity.ts'],
+      },
     ],
     constraints: ['Do not modify unrelated modules.'],
     acceptanceCriteria: ['A session entity exists.'],
@@ -234,7 +264,9 @@ function successResult(
     status: 'SUCCEEDED',
     summary: 'Implemented the interview session entity.',
     changedFiles: [],
-    toolActivities: [{ type: 'tool_use', name: 'Write', summary: 'Write: hello.txt' }],
+    toolActivities: [
+      { type: 'tool_use', name: 'Write', summary: 'Write: hello.txt' },
+    ],
     commandActivities: [],
     usage: { inputTokens: 200, outputTokens: 80 },
     metadata: {
@@ -269,7 +301,10 @@ describe('Task Execution / Single Task Orchestrator (e2e)', () => {
     generateStructuredOutput,
     healthCheck: jest.fn(),
   };
-  const stubCodingAgentProvider: CodingAgentProvider = { executeTask, healthCheck };
+  const stubCodingAgentProvider: CodingAgentProvider = {
+    executeTask,
+    healthCheck,
+  };
 
   const uniqueEmail = (label: string) => {
     const email = `${label}-${Date.now()}-${Math.random().toString(36).slice(2)}@example.com`;
@@ -289,7 +324,10 @@ describe('Task Execution / Single Task Orchestrator (e2e)', () => {
     const res = await request(app.getHttpServer())
       .post('/projects')
       .set('Authorization', `Bearer ${token}`)
-      .send({ name: 'Task Execution Demo', brief: 'Verify the Single Task Orchestrator.' });
+      .send({
+        name: 'Task Execution Demo',
+        brief: 'Verify the Single Task Orchestrator.',
+      });
     return res.body.id as string;
   };
 
@@ -345,7 +383,10 @@ describe('Task Execution / Single Task Orchestrator (e2e)', () => {
     token: string,
   ): Promise<{ projectId: string; taskId1: string; taskId2: string }> => {
     const projectId = await createProject(token);
-    const { taskId1, taskId2 } = await approveThroughStartDevelopment(token, projectId);
+    const { taskId1, taskId2 } = await approveThroughStartDevelopment(
+      token,
+      projectId,
+    );
     await request(app.getHttpServer())
       .post(`/projects/${projectId}/workspace/prepare`)
       .set('Authorization', `Bearer ${token}`)
@@ -382,7 +423,11 @@ describe('Task Execution / Single Task Orchestrator (e2e)', () => {
 
     app = moduleFixture.createNestApplication();
     app.useGlobalPipes(
-      new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
+      new ValidationPipe({
+        whitelist: true,
+        forbidNonWhitelisted: true,
+        transform: true,
+      }),
     );
     app.useGlobalFilters(new HttpExceptionFilter());
     await app.init();
@@ -406,11 +451,21 @@ describe('Task Execution / Single Task Orchestrator (e2e)', () => {
   });
 
   it('rejects unauthenticated access to every task-execution route', async () => {
-    await request(app.getHttpServer()).post('/projects/x/tasks/y/run').expect(401);
-    await request(app.getHttpServer()).get('/projects/x/tasks/y/execution-eligibility').expect(401);
-    await request(app.getHttpServer()).get('/projects/x/tasks/y/executions').expect(401);
-    await request(app.getHttpServer()).get('/projects/x/tasks/y/execution/current').expect(401);
-    await request(app.getHttpServer()).get('/projects/x/task-executions/z').expect(401);
+    await request(app.getHttpServer())
+      .post('/projects/x/tasks/y/run')
+      .expect(401);
+    await request(app.getHttpServer())
+      .get('/projects/x/tasks/y/execution-eligibility')
+      .expect(401);
+    await request(app.getHttpServer())
+      .get('/projects/x/tasks/y/executions')
+      .expect(401);
+    await request(app.getHttpServer())
+      .get('/projects/x/tasks/y/execution/current')
+      .expect(401);
+    await request(app.getHttpServer())
+      .get('/projects/x/task-executions/z')
+      .expect(401);
   });
 
   it('reports a runnable eligibility for a fresh, dependency-free Task', async () => {
@@ -551,20 +606,27 @@ describe('Task Execution / Single Task Orchestrator (e2e)', () => {
         .expect(200);
       expect(detail.body.status).toBe('READY_FOR_VALIDATION');
       expect(detail.body.changedFiles).toEqual(
-        expect.arrayContaining([{ path: 'hello.txt', changeType: 'UNTRACKED' }]),
+        expect.arrayContaining([
+          { path: 'hello.txt', changeType: 'UNTRACKED' },
+        ]),
       );
       expect(detail.body.repositoryStartSha).toBeTruthy();
       expect(detail.body.repositoryEndSha).toBe(detail.body.repositoryStartSha);
 
-      const taskInstructionSentToProvider = executeTask.mock.calls[0][0].instruction;
-      expect(taskInstructionSentToProvider).toContain('interview session entity');
+      const taskInstructionSentToProvider =
+        executeTask.mock.calls[0][0].instruction;
+      expect(taskInstructionSentToProvider).toContain(
+        'interview session entity',
+      );
 
       // Never PASSED — only Sprint 13's validation step can do that.
       const plan = await request(app.getHttpServer())
         .get(`/projects/${projectId}/sprint-plan`)
         .set('Authorization', `Bearer ${token}`)
         .expect(200);
-      const task = plan.body.sprints[0].tasks.find((t: { id: string }) => t.id === taskId1);
+      const task = plan.body.sprints[0].tasks.find(
+        (t: { id: string }) => t.id === taskId1,
+      );
       expect(task.status).toBe('REVIEWING');
       expect(plan.body.sprints[0].status).toBe('RUNNING');
     });
@@ -643,16 +705,22 @@ describe('Task Execution / Single Task Orchestrator (e2e)', () => {
         .expect(200);
       expect(detail.body.status).toBe('FAILED');
       expect(detail.body.changedFiles).toEqual(
-        expect.arrayContaining([{ path: 'broken.txt', changeType: 'UNTRACKED' }]),
+        expect.arrayContaining([
+          { path: 'broken.txt', changeType: 'UNTRACKED' },
+        ]),
       );
       // Never a raw provider/SDK exception shape leaked to the client.
-      expect(JSON.stringify(detail.body)).not.toMatch(/Anthropic|SDKMessage|ClaudeCode/);
+      expect(JSON.stringify(detail.body)).not.toMatch(
+        /Anthropic|SDKMessage|ClaudeCode/,
+      );
 
       const plan = await request(app.getHttpServer())
         .get(`/projects/${projectId}/sprint-plan`)
         .set('Authorization', `Bearer ${token}`)
         .expect(200);
-      const task = plan.body.sprints[0].tasks.find((t: { id: string }) => t.id === taskId1);
+      const task = plan.body.sprints[0].tasks.find(
+        (t: { id: string }) => t.id === taskId1,
+      );
       expect(task.status).toBe('FAILED');
 
       // The workspace was never reset/cleaned — its dirty state now

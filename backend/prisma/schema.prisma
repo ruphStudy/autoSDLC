@@ -121,6 +121,7 @@ enum JobType {
   WORKSPACE_PREPARE
   CODING_AGENT_EXECUTION
   TASK_EXECUTION
+  TASK_VALIDATION
 }
 
 enum JobStatus {
@@ -168,9 +169,10 @@ model Project {
   approvals        Approval[]
   jobs             Job[]
   workspace        ProjectWorkspace?
-  agentJobs        AgentJob[]
-  taskInstructions TaskInstruction[]
-  taskExecutions   TaskExecution[]
+  agentJobs          AgentJob[]
+  taskInstructions   TaskInstruction[]
+  taskExecutions     TaskExecution[]
+  validationAttempts ValidationAttempt[]
 
   @@index([userId, archivedAt])
   @@map("projects")
@@ -408,9 +410,10 @@ model Task {
 
   dependencies TaskDependency[]  @relation("TaskDependencies")
   dependents   TaskDependency[]  @relation("TaskDependents")
-  agentJobs    AgentJob[]
-  instructions TaskInstruction[]
-  executions   TaskExecution[]
+  agentJobs          AgentJob[]
+  instructions       TaskInstruction[]
+  executions         TaskExecution[]
+  validationAttempts ValidationAttempt[]
 
   @@unique([sprintPlanId, key])
   @@index([sprintId, order])
@@ -803,6 +806,12 @@ model TaskExecution {
   completedAt DateTime?
   durationMs  Int?
 
+  // Set only once deterministic validation (Sprint 13) has passed and
+  // successfully committed exactly this execution's change set. Null for
+  // every FAILED/CANCELLED execution and for a SUCCEEDED one still awaiting
+  // validation.
+  commitSha String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -811,4 +820,128 @@ model TaskExecution {
   @@index([taskId])
   @@index([status])
   @@map("task_executions")
+}
+
+enum ValidationRunStatus {
+  PENDING
+  RUNNING
+  PASSED
+  FAILED
+  CANCELLED
+  SKIPPED
+}
+
+enum ValidationCheckType {
+  LINT
+  TYPECHECK
+  UNIT_TEST
+  INTEGRATION_TEST
+  E2E_TEST
+  BUILD
+  CUSTOM
+}
+
+enum ValidationAttemptStatus {
+  QUEUED
+  RUNNING
+  PASSED
+  FAILED
+  CANCELLED
+}
+
+// One deterministic-validation pass for a Task's REVIEWING TaskExecution —
+// deliberately its own domain rather than reusing TaskExecution as the
+// parent, since a single coding-agent execution may reasonably be
+// (re-)validated more than once (e.g. flaky test infra) without ever
+// re-running Claude.
+model ValidationAttempt {
+  id        String  @id @default(uuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  taskId    String
+  task      Task    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  // Cross-domain reference by id only (see TaskExecution.agentJobId for the
+  // same pattern) — the TaskExecution this attempt validates.
+  taskExecutionId String
+  backgroundJobId String? @unique
+
+  attempt Int
+  status  ValidationAttemptStatus @default(QUEUED)
+
+  startedAt   DateTime?
+  completedAt DateTime?
+
+  requiredPassed Int @default(0)
+  requiredFailed Int @default(0)
+  optionalPassed Int @default(0)
+  optionalFailed Int @default(0)
+
+  commitSha String?
+
+  // SHA-256 over the sorted changed-file list + unstaged diff, captured
+  // immediately before staging — an audit trail of exactly what change set
+  // was validated. Not the gating mechanism itself (that's a changed-file-
+  // set comparison) — purely for auditability.
+  validatedDiffHash String?
+
+  errorCode    String?
+  errorMessage String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  runs ValidationRun[]
+
+  @@unique([taskId, attempt])
+  @@index([projectId, createdAt])
+  @@index([taskId])
+  @@index([status])
+  @@map("validation_attempts")
+}
+
+// One deterministic check (lint/typecheck/unit test/build/...) within a
+// ValidationAttempt.
+model ValidationRun {
+  id                  String            @id @default(uuid())
+  validationAttemptId String
+  validationAttempt   ValidationAttempt @relation(fields: [validationAttemptId], references: [id], onDelete: Cascade)
+  projectId           String
+  taskId              String
+  taskExecutionId     String
+
+  type ValidationCheckType
+  name String
+
+  // Trusted, server-resolved only — never accepted from a client. Args
+  // stored as JSON (structured) alongside the display command string.
+  command          String
+  args             Json
+  // Repository-relative only (e.g. "backend") — never an absolute
+  // filesystem path (see the equivalent workspacePath exclusion on
+  // TaskExecutionRecord).
+  workingDirectory String?
+
+  status   ValidationRunStatus @default(PENDING)
+  required Boolean
+
+  exitCode Int?
+
+  // Bounded and best-effort secret-redacted before persistence.
+  stdout          String?
+  stderr          String?
+  outputTruncated Boolean @default(false)
+
+  startedAt   DateTime?
+  completedAt DateTime?
+  durationMs  Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([validationAttemptId])
+  @@index([type])
+  @@index([status])
+  @@index([createdAt])
+  @@map("validation_runs")
 }

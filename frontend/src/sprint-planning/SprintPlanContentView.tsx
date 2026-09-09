@@ -1,6 +1,7 @@
 import type { SprintPlan, Task } from './types';
 import { TaskInstructionPreview } from '../task-instruction/TaskInstructionPreview';
 import { TaskExecutionPanel } from '../task-execution/TaskExecutionPanel';
+import { TaskValidationPanel } from '../task-validation/TaskValidationPanel';
 
 function Chips({ items }: { items: string[] }) {
   if (items.length === 0) return null;
@@ -70,7 +71,10 @@ function TaskCard({
 
       {canPreviewInstructions && <TaskInstructionPreview projectId={projectId} taskId={task.id} />}
       {canRunTasks && (
-        <TaskExecutionPanel projectId={projectId} taskId={task.id} taskStatus={task.status} />
+        <>
+          <TaskExecutionPanel projectId={projectId} taskId={task.id} taskStatus={task.status} />
+          <TaskValidationPanel projectId={projectId} taskId={task.id} />
+        </>
       )}
     </li>
   );

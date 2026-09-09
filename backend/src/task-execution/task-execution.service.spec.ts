@@ -6,10 +6,16 @@ import {
   TaskStatus,
 } from '@prisma/client';
 import { TaskExecutionService } from './task-execution.service';
-import { TaskExecutionError, TaskExecutionErrorCode } from './errors/task-execution.error';
-import { ApprovalError, ApprovalErrorCode } from '../approval/errors/approval.error';
+import { TaskExecutionErrorCode } from './errors/task-execution.error';
+import {
+  ApprovalError,
+  ApprovalErrorCode,
+} from '../approval/errors/approval.error';
 import { GitError, GitErrorCode } from '../workspace/errors/git.error';
-import { CodingAgentError, CodingAgentErrorCode } from '../coding-agent/errors/coding-agent.error';
+import {
+  CodingAgentError,
+  CodingAgentErrorCode,
+} from '../coding-agent/errors/coding-agent.error';
 
 function buildProject(overrides: Partial<Record<string, unknown>> = {}) {
   return {
@@ -114,7 +120,11 @@ describe('TaskExecutionService', () => {
       projectWorkspace: { findUnique: jest.fn() },
       taskExecution: {
         create: jest.fn(),
-        update: jest.fn().mockImplementation((args: any) => buildExecutionRow(args?.data ?? {})),
+        update: jest
+          .fn()
+          .mockImplementation((args: any) =>
+            buildExecutionRow(args?.data ?? {}),
+          ),
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
         findFirst: jest.fn(),
         findMany: jest.fn(),
@@ -167,7 +177,9 @@ describe('TaskExecutionService', () => {
     prisma.task.findFirst.mockResolvedValue(buildTaskWithDeps());
     prisma.sprintPlan.findFirst.mockResolvedValue({ id: 'plan-1' });
     prisma.taskExecution.findFirst.mockResolvedValue(null);
-    workspaceService.getReadyWorkspacePath.mockResolvedValue('/workspaces/project-1');
+    workspaceService.getReadyWorkspacePath.mockResolvedValue(
+      '/workspaces/project-1',
+    );
     prisma.projectWorkspace.findUnique.mockResolvedValue({
       developmentBranch: 'autodev/development',
     });
@@ -179,7 +191,11 @@ describe('TaskExecutionService', () => {
     it('is runnable when every gate passes', async () => {
       setupEligibleMocks();
 
-      const result = await service.getEligibility('user-1', 'project-1', 'task-1');
+      const result = await service.getEligibility(
+        'user-1',
+        'project-1',
+        'task-1',
+      );
 
       expect(result.runnable).toBe(true);
       expect(result.reasons).toEqual([]);
@@ -187,9 +203,15 @@ describe('TaskExecutionService', () => {
 
     it('flags an archived project', async () => {
       setupEligibleMocks();
-      projectsService.findOneForUser.mockResolvedValue(buildProject({ archivedAt: new Date() }));
+      projectsService.findOneForUser.mockResolvedValue(
+        buildProject({ archivedAt: new Date() }),
+      );
 
-      const result = await service.getEligibility('user-1', 'project-1', 'task-1');
+      const result = await service.getEligibility(
+        'user-1',
+        'project-1',
+        'task-1',
+      );
 
       expect(result.reasons).toContain(TaskExecutionErrorCode.PROJECT_ARCHIVED);
     });
@@ -198,9 +220,15 @@ describe('TaskExecutionService', () => {
       setupEligibleMocks();
       prisma.sprintPlan.findFirst.mockResolvedValue({ id: 'plan-2' });
 
-      const result = await service.getEligibility('user-1', 'project-1', 'task-1');
+      const result = await service.getEligibility(
+        'user-1',
+        'project-1',
+        'task-1',
+      );
 
-      expect(result.reasons).toContain(TaskExecutionErrorCode.TASK_NOT_IN_CURRENT_PLAN);
+      expect(result.reasons).toContain(
+        TaskExecutionErrorCode.TASK_NOT_IN_CURRENT_PLAN,
+      );
     });
 
     it('flags missing development approval', async () => {
@@ -212,9 +240,15 @@ describe('TaskExecutionService', () => {
         }),
       );
 
-      const result = await service.getEligibility('user-1', 'project-1', 'task-1');
+      const result = await service.getEligibility(
+        'user-1',
+        'project-1',
+        'task-1',
+      );
 
-      expect(result.reasons).toContain(TaskExecutionErrorCode.DEVELOPMENT_NOT_APPROVED);
+      expect(result.reasons).toContain(
+        TaskExecutionErrorCode.DEVELOPMENT_NOT_APPROVED,
+      );
     });
 
     it.each([
@@ -227,7 +261,11 @@ describe('TaskExecutionService', () => {
       setupEligibleMocks();
       prisma.task.findFirst.mockResolvedValue(buildTaskWithDeps({ status }));
 
-      const result = await service.getEligibility('user-1', 'project-1', 'task-1');
+      const result = await service.getEligibility(
+        'user-1',
+        'project-1',
+        'task-1',
+      );
 
       expect(result.reasons).toContain(expectedCode);
     });
@@ -235,10 +273,16 @@ describe('TaskExecutionService', () => {
     it('flags a Task whose Sprint is BLOCKED', async () => {
       setupEligibleMocks();
       prisma.task.findFirst.mockResolvedValue(
-        buildTaskWithDeps({ sprint: { id: 'sprint-1', status: SprintStatus.BLOCKED } }),
+        buildTaskWithDeps({
+          sprint: { id: 'sprint-1', status: SprintStatus.BLOCKED },
+        }),
       );
 
-      const result = await service.getEligibility('user-1', 'project-1', 'task-1');
+      const result = await service.getEligibility(
+        'user-1',
+        'project-1',
+        'task-1',
+      );
 
       expect(result.reasons).toContain(TaskExecutionErrorCode.SPRINT_BLOCKED);
     });
@@ -251,9 +295,15 @@ describe('TaskExecutionService', () => {
         }),
       );
 
-      const result = await service.getEligibility('user-1', 'project-1', 'task-1');
+      const result = await service.getEligibility(
+        'user-1',
+        'project-1',
+        'task-1',
+      );
 
-      expect(result.reasons).toContain(TaskExecutionErrorCode.DEPENDENCY_NOT_PASSED);
+      expect(result.reasons).toContain(
+        TaskExecutionErrorCode.DEPENDENCY_NOT_PASSED,
+      );
     });
 
     it('is runnable when every dependency is exactly PASSED', async () => {
@@ -264,7 +314,11 @@ describe('TaskExecutionService', () => {
         }),
       );
 
-      const result = await service.getEligibility('user-1', 'project-1', 'task-1');
+      const result = await service.getEligibility(
+        'user-1',
+        'project-1',
+        'task-1',
+      );
 
       expect(result.runnable).toBe(true);
     });
@@ -272,11 +326,18 @@ describe('TaskExecutionService', () => {
     it('flags an active execution for the same Task', async () => {
       setupEligibleMocks();
       prisma.taskExecution.findFirst.mockResolvedValue(
-        buildExecutionRow({ status: TaskExecutionStatus.RUNNING, backgroundJobId: 'job-1' }),
+        buildExecutionRow({
+          status: TaskExecutionStatus.RUNNING,
+          backgroundJobId: 'job-1',
+        }),
       );
       prisma.job.findUnique.mockResolvedValue({ status: 'RUNNING' });
 
-      const result = await service.getEligibility('user-1', 'project-1', 'task-1');
+      const result = await service.getEligibility(
+        'user-1',
+        'project-1',
+        'task-1',
+      );
 
       expect(result.reasons).toContain(TaskExecutionErrorCode.ACTIVE_EXECUTION);
     });
@@ -286,39 +347,64 @@ describe('TaskExecutionService', () => {
       // First call: reconcileOrphanedExecution's own lookup, finding the
       // stale RUNNING row backed by a Job that already finished.
       prisma.taskExecution.findFirst.mockResolvedValueOnce(
-        buildExecutionRow({ status: TaskExecutionStatus.RUNNING, backgroundJobId: 'job-1' }),
+        buildExecutionRow({
+          status: TaskExecutionStatus.RUNNING,
+          backgroundJobId: 'job-1',
+        }),
       );
       prisma.job.findUnique.mockResolvedValue({ status: 'FAILED' });
       // Second call: evaluateEligibility's own active-execution check, run
       // after reconciliation has already marked that row FAILED.
       prisma.taskExecution.findFirst.mockResolvedValueOnce(null);
 
-      const result = await service.getEligibility('user-1', 'project-1', 'task-1');
+      const result = await service.getEligibility(
+        'user-1',
+        'project-1',
+        'task-1',
+      );
 
       expect(prisma.taskExecution.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({ status: TaskExecutionStatus.FAILED }),
         }),
       );
-      expect(result.reasons).not.toContain(TaskExecutionErrorCode.ACTIVE_EXECUTION);
+      expect(result.reasons).not.toContain(
+        TaskExecutionErrorCode.ACTIVE_EXECUTION,
+      );
     });
 
     it('flags a workspace that is not ready', async () => {
       setupEligibleMocks();
       workspaceService.getReadyWorkspacePath.mockRejectedValue(
-        new GitError({ code: GitErrorCode.WORKSPACE_NOT_READY, message: 'not ready' }),
+        new GitError({
+          code: GitErrorCode.WORKSPACE_NOT_READY,
+          message: 'not ready',
+        }),
       );
 
-      const result = await service.getEligibility('user-1', 'project-1', 'task-1');
+      const result = await service.getEligibility(
+        'user-1',
+        'project-1',
+        'task-1',
+      );
 
-      expect(result.reasons).toContain(TaskExecutionErrorCode.WORKSPACE_NOT_READY);
+      expect(result.reasons).toContain(
+        TaskExecutionErrorCode.WORKSPACE_NOT_READY,
+      );
     });
 
     it('flags a dirty workspace', async () => {
       setupEligibleMocks();
-      git.getStatus.mockResolvedValue({ clean: false, files: [{ path: 'a.txt' }] });
+      git.getStatus.mockResolvedValue({
+        clean: false,
+        files: [{ path: 'a.txt' }],
+      });
 
-      const result = await service.getEligibility('user-1', 'project-1', 'task-1');
+      const result = await service.getEligibility(
+        'user-1',
+        'project-1',
+        'task-1',
+      );
 
       expect(result.reasons).toContain(TaskExecutionErrorCode.WORKSPACE_DIRTY);
     });
@@ -327,7 +413,11 @@ describe('TaskExecutionService', () => {
       setupEligibleMocks();
       git.getCurrentBranch.mockResolvedValue('main');
 
-      const result = await service.getEligibility('user-1', 'project-1', 'task-1');
+      const result = await service.getEligibility(
+        'user-1',
+        'project-1',
+        'task-1',
+      );
 
       expect(result.reasons).toContain(TaskExecutionErrorCode.WRONG_BRANCH);
     });
@@ -349,13 +439,19 @@ describe('TaskExecutionService', () => {
 
       expect(prisma.task.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { id: 'task-1', status: { in: [TaskStatus.PENDING, TaskStatus.READY] } },
+          where: {
+            id: 'task-1',
+            status: { in: [TaskStatus.PENDING, TaskStatus.READY] },
+          },
           data: { status: TaskStatus.RUNNING },
         }),
       );
       expect(prisma.taskExecution.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({ attempt: 1, priorTaskStatus: TaskStatus.READY }),
+          data: expect.objectContaining({
+            attempt: 1,
+            priorTaskStatus: TaskStatus.READY,
+          }),
         }),
       );
       expect(prisma.project.updateMany).toHaveBeenCalledWith(
@@ -368,7 +464,11 @@ describe('TaskExecutionService', () => {
         expect.objectContaining({
           type: JobType.TASK_EXECUTION,
           maxAttempts: 1,
-          payload: { taskExecutionId: 'exec-1', taskId: 'task-1', projectId: 'project-1' },
+          payload: {
+            taskExecutionId: 'exec-1',
+            taskId: 'task-1',
+            projectId: 'project-1',
+          },
         }),
       );
       expect(result.job.id).toBe('job-1');
@@ -376,9 +476,13 @@ describe('TaskExecutionService', () => {
 
     it('rejects when the Task is not eligible, without ever touching the lock', async () => {
       setupEligibleMocks();
-      prisma.task.findFirst.mockResolvedValue(buildTaskWithDeps({ status: TaskStatus.PASSED }));
+      prisma.task.findFirst.mockResolvedValue(
+        buildTaskWithDeps({ status: TaskStatus.PASSED }),
+      );
 
-      await expect(service.run('user-1', 'project-1', 'task-1')).rejects.toBeInstanceOf(Error);
+      await expect(
+        service.run('user-1', 'project-1', 'task-1'),
+      ).rejects.toBeInstanceOf(Error);
       expect(prisma.task.updateMany).not.toHaveBeenCalled();
     });
 
@@ -387,7 +491,9 @@ describe('TaskExecutionService', () => {
       prisma.task.findUniqueOrThrow.mockResolvedValue(buildTaskRow());
       prisma.task.updateMany.mockResolvedValue({ count: 0 });
 
-      await expect(service.run('user-1', 'project-1', 'task-1')).rejects.toBeInstanceOf(Error);
+      await expect(
+        service.run('user-1', 'project-1', 'task-1'),
+      ).rejects.toBeInstanceOf(Error);
       expect(prisma.taskExecution.create).not.toHaveBeenCalled();
       expect(jobService.enqueue).not.toHaveBeenCalled();
     });
@@ -400,7 +506,9 @@ describe('TaskExecutionService', () => {
       prisma.task.findUniqueOrThrow.mockResolvedValue(buildTaskRow());
       prisma.taskExecution.create.mockResolvedValue(buildExecutionRow());
       jobService.enqueue.mockResolvedValue({ id: 'job-1' });
-      prisma.taskExecution.update.mockResolvedValue(buildExecutionRow({ backgroundJobId: 'job-1' }));
+      prisma.taskExecution.update.mockResolvedValue(
+        buildExecutionRow({ backgroundJobId: 'job-1' }),
+      );
 
       await service.run('user-1', 'project-1', 'task-1');
 
@@ -409,7 +517,10 @@ describe('TaskExecutionService', () => {
       // already DEVELOPING.
       expect(prisma.project.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { id: 'project-1', status: ProjectStatus.DEVELOPMENT_APPROVED },
+          where: {
+            id: 'project-1',
+            status: ProjectStatus.DEVELOPMENT_APPROVED,
+          },
         }),
       );
     });
@@ -420,9 +531,9 @@ describe('TaskExecutionService', () => {
       prisma.taskExecution.create.mockResolvedValue(buildExecutionRow());
       jobService.enqueue.mockRejectedValue(new Error('queue unavailable'));
 
-      await expect(service.run('user-1', 'project-1', 'task-1')).rejects.toThrow(
-        'queue unavailable',
-      );
+      await expect(
+        service.run('user-1', 'project-1', 'task-1'),
+      ).rejects.toThrow('queue unavailable');
 
       expect(prisma.taskExecution.update).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -443,9 +554,13 @@ describe('TaskExecutionService', () => {
 
   describe('execute (background worker)', () => {
     function setupExecuteHappyPathMocks() {
-      prisma.taskExecution.findUniqueOrThrow.mockResolvedValue(buildExecutionRow());
+      prisma.taskExecution.findUniqueOrThrow.mockResolvedValue(
+        buildExecutionRow(),
+      );
       prisma.task.findFirst.mockResolvedValue(buildTaskWithDeps());
-      workspaceService.getReadyWorkspacePath.mockResolvedValue('/workspaces/project-1');
+      workspaceService.getReadyWorkspacePath.mockResolvedValue(
+        '/workspaces/project-1',
+      );
       prisma.projectWorkspace.findUnique.mockResolvedValue({
         developmentBranch: 'autodev/development',
       });
@@ -463,7 +578,9 @@ describe('TaskExecutionService', () => {
       codingAgentService.execute.mockResolvedValue(
         buildAgentJobRecord({ status: 'SUCCEEDED' }),
       );
-      git.getHeadCommitSha.mockResolvedValueOnce('sha-start').mockResolvedValue('sha-start');
+      git.getHeadCommitSha
+        .mockResolvedValueOnce('sha-start')
+        .mockResolvedValue('sha-start');
 
       await service.execute('exec-1', context);
 
@@ -473,32 +590,51 @@ describe('TaskExecutionService', () => {
       expect(prisma.task.update).not.toHaveBeenCalledWith(
         expect.objectContaining({ data: { status: TaskStatus.PASSED } }),
       );
-      expect(codingAgentService.execute).toHaveBeenCalledWith('agent-job-1', context);
+      expect(codingAgentService.execute).toHaveBeenCalledWith(
+        'agent-job-1',
+        context,
+      );
     });
 
     it('captures changed files and diff, and marks the TaskExecution READY_FOR_VALIDATION on success', async () => {
       setupExecuteHappyPathMocks();
-      codingAgentService.execute.mockResolvedValue(buildAgentJobRecord({ status: 'SUCCEEDED' }));
+      codingAgentService.execute.mockResolvedValue(
+        buildAgentJobRecord({ status: 'SUCCEEDED' }),
+      );
       git.getStatus
         .mockResolvedValueOnce({ clean: true, files: [] }) // pre-flight check
         .mockResolvedValueOnce({
           clean: false,
           files: [{ path: 'hello.txt', status: 'ADDED', staged: false }],
         });
-      git.getDiff.mockResolvedValue({ diff: 'diff --git a/hello.txt', truncated: false, sizeBytes: 10 });
+      git.getDiff.mockResolvedValue({
+        diff: 'diff --git a/hello.txt',
+        truncated: false,
+        sizeBytes: 10,
+      });
 
       await service.execute('exec-1', context);
 
-      const executionUpdateCalls = prisma.taskExecution.update.mock.calls.map((c: any[]) => c[0]);
-      const finalUpdate = executionUpdateCalls.find((c: any) => c.data.status === TaskExecutionStatus.READY_FOR_VALIDATION);
-      expect(finalUpdate.data.changedFiles).toEqual([{ path: 'hello.txt', changeType: 'ADDED' }]);
+      const executionUpdateCalls = prisma.taskExecution.update.mock.calls.map(
+        (c: any[]) => c[0],
+      );
+      const finalUpdate = executionUpdateCalls.find(
+        (c: any) => c.data.status === TaskExecutionStatus.READY_FOR_VALIDATION,
+      );
+      expect(finalUpdate.data.changedFiles).toEqual([
+        { path: 'hello.txt', changeType: 'ADDED' },
+      ]);
       expect(finalUpdate.data.gitDiff).toContain('hello.txt');
     });
 
     it('marks the Task FAILED and preserves partial changes (no reset) when the agent fails', async () => {
       setupExecuteHappyPathMocks();
       codingAgentService.execute.mockResolvedValue(
-        buildAgentJobRecord({ status: 'FAILED', errorCode: 'PROVIDER_UNAVAILABLE', errorMessage: 'failed' }),
+        buildAgentJobRecord({
+          status: 'FAILED',
+          errorCode: 'PROVIDER_UNAVAILABLE',
+          errorMessage: 'failed',
+        }),
       );
       git.getStatus
         .mockResolvedValueOnce({ clean: true, files: [] })
@@ -506,7 +642,11 @@ describe('TaskExecutionService', () => {
           clean: false,
           files: [{ path: 'broken.txt', status: 'MODIFIED', staged: false }],
         });
-      git.getDiff.mockResolvedValue({ diff: 'diff --git a/broken.txt', truncated: false, sizeBytes: 10 });
+      git.getDiff.mockResolvedValue({
+        diff: 'diff --git a/broken.txt',
+        truncated: false,
+        sizeBytes: 10,
+      });
 
       await service.execute('exec-1', context);
 
@@ -516,14 +656,19 @@ describe('TaskExecutionService', () => {
       const finalUpdate = prisma.taskExecution.update.mock.calls
         .map((c: any[]) => c[0])
         .find((c: any) => c.data.status === TaskExecutionStatus.FAILED);
-      expect(finalUpdate.data.changedFiles).toEqual([{ path: 'broken.txt', changeType: 'MODIFIED' }]);
+      expect(finalUpdate.data.changedFiles).toEqual([
+        { path: 'broken.txt', changeType: 'MODIFIED' },
+      ]);
       expect(finalUpdate.data.gitDiff).toContain('broken.txt');
     });
 
     it('rolls the Task back to its prior status (not FAILED) when the failure happens before the coding agent ever starts', async () => {
       setupExecuteHappyPathMocks();
       workspaceService.getReadyWorkspacePath.mockRejectedValue(
-        new GitError({ code: GitErrorCode.WORKSPACE_NOT_READY, message: 'gone' }),
+        new GitError({
+          code: GitErrorCode.WORKSPACE_NOT_READY,
+          message: 'gone',
+        }),
       );
 
       await service.execute('exec-1', context);
@@ -538,13 +683,17 @@ describe('TaskExecutionService', () => {
       const executionUpdate = prisma.taskExecution.update.mock.calls
         .map((c: any[]) => c[0])
         .find((c: any) => c.data.status === TaskExecutionStatus.FAILED);
-      expect(executionUpdate.data.errorCode).toBe(TaskExecutionErrorCode.WORKSPACE_NOT_READY);
+      expect(executionUpdate.data.errorCode).toBe(
+        TaskExecutionErrorCode.WORKSPACE_NOT_READY,
+      );
     });
 
     it('rolls the Task back when a dependency stopped being PASSED before the agent started', async () => {
       setupExecuteHappyPathMocks();
       prisma.task.findFirst.mockResolvedValue(
-        buildTaskWithDeps({ dependencies: [{ dependsOnTask: { status: TaskStatus.FAILED } }] }),
+        buildTaskWithDeps({
+          dependencies: [{ dependsOnTask: { status: TaskStatus.FAILED } }],
+        }),
       );
 
       await service.execute('exec-1', context);
@@ -562,7 +711,9 @@ describe('TaskExecutionService', () => {
       await service.execute('exec-1', context);
 
       expect(codingAgentService.execute).not.toHaveBeenCalled();
-      expect(taskInstructionService.getOrGenerateFreshInstruction).not.toHaveBeenCalled();
+      expect(
+        taskInstructionService.getOrGenerateFreshInstruction,
+      ).not.toHaveBeenCalled();
       const executionUpdate = prisma.taskExecution.update.mock.calls
         .map((c: any[]) => c[0])
         .find((c: any) => c.data.status === TaskExecutionStatus.CANCELLED);
@@ -571,7 +722,9 @@ describe('TaskExecutionService', () => {
 
     it('returns the Task to its prior status on cancellation with no resulting file changes', async () => {
       setupExecuteHappyPathMocks();
-      codingAgentService.execute.mockResolvedValue(buildAgentJobRecord({ status: 'CANCELLED' }));
+      codingAgentService.execute.mockResolvedValue(
+        buildAgentJobRecord({ status: 'CANCELLED' }),
+      );
       git.getStatus
         .mockResolvedValueOnce({ clean: true, files: [] })
         .mockResolvedValueOnce({ clean: true, files: [] });
@@ -585,14 +738,20 @@ describe('TaskExecutionService', () => {
 
     it('marks the Task FAILED on cancellation if files were modified before the abort landed', async () => {
       setupExecuteHappyPathMocks();
-      codingAgentService.execute.mockResolvedValue(buildAgentJobRecord({ status: 'CANCELLED' }));
+      codingAgentService.execute.mockResolvedValue(
+        buildAgentJobRecord({ status: 'CANCELLED' }),
+      );
       git.getStatus
         .mockResolvedValueOnce({ clean: true, files: [] })
         .mockResolvedValueOnce({
           clean: false,
           files: [{ path: 'partial.txt', status: 'ADDED', staged: false }],
         });
-      git.getDiff.mockResolvedValue({ diff: '', truncated: false, sizeBytes: 0 });
+      git.getDiff.mockResolvedValue({
+        diff: '',
+        truncated: false,
+        sizeBytes: 0,
+      });
 
       await service.execute('exec-1', context);
 
@@ -604,25 +763,37 @@ describe('TaskExecutionService', () => {
     it('regenerates once and proceeds when the instruction drifted, then failing safely if it drifts again', async () => {
       setupExecuteHappyPathMocks();
       taskInstructionService.getOrGenerateFreshInstruction
-        .mockResolvedValueOnce(buildInstruction({ repositoryHeadSha: 'sha-old' }))
-        .mockResolvedValueOnce(buildInstruction({ repositoryHeadSha: 'sha-new' }));
+        .mockResolvedValueOnce(
+          buildInstruction({ repositoryHeadSha: 'sha-old' }),
+        )
+        .mockResolvedValueOnce(
+          buildInstruction({ repositoryHeadSha: 'sha-new' }),
+        );
       git.getHeadCommitSha
         .mockResolvedValueOnce('sha-start') // repositoryStartSha capture
         .mockResolvedValueOnce('sha-new') // first freshness check (drifted)
         .mockResolvedValueOnce('sha-new'); // second freshness check (matches now)
-      codingAgentService.execute.mockResolvedValue(buildAgentJobRecord({ status: 'SUCCEEDED' }));
+      codingAgentService.execute.mockResolvedValue(
+        buildAgentJobRecord({ status: 'SUCCEEDED' }),
+      );
 
       await service.execute('exec-1', context);
 
-      expect(taskInstructionService.getOrGenerateFreshInstruction).toHaveBeenCalledTimes(2);
+      expect(
+        taskInstructionService.getOrGenerateFreshInstruction,
+      ).toHaveBeenCalledTimes(2);
       expect(codingAgentService.execute).toHaveBeenCalled();
     });
 
     it('fails safely with REPOSITORY_STATE_CHANGED if the instruction keeps drifting after one regeneration', async () => {
       setupExecuteHappyPathMocks();
       taskInstructionService.getOrGenerateFreshInstruction
-        .mockResolvedValueOnce(buildInstruction({ repositoryHeadSha: 'sha-old' }))
-        .mockResolvedValueOnce(buildInstruction({ repositoryHeadSha: 'sha-older' }));
+        .mockResolvedValueOnce(
+          buildInstruction({ repositoryHeadSha: 'sha-old' }),
+        )
+        .mockResolvedValueOnce(
+          buildInstruction({ repositoryHeadSha: 'sha-older' }),
+        );
       git.getHeadCommitSha
         .mockResolvedValueOnce('sha-start')
         .mockResolvedValueOnce('sha-new')
@@ -634,12 +805,16 @@ describe('TaskExecutionService', () => {
       const executionUpdate = prisma.taskExecution.update.mock.calls
         .map((c: any[]) => c[0])
         .find((c: any) => c.data.status === TaskExecutionStatus.FAILED);
-      expect(executionUpdate.data.errorCode).toBe(TaskExecutionErrorCode.REPOSITORY_STATE_CHANGED);
+      expect(executionUpdate.data.errorCode).toBe(
+        TaskExecutionErrorCode.REPOSITORY_STATE_CHANGED,
+      );
     });
 
     it('never mistakes a post-agent bookkeeping failure for a pre-agent failure (must not roll the Task back once the agent has actually run)', async () => {
       setupExecuteHappyPathMocks();
-      codingAgentService.execute.mockResolvedValue(buildAgentJobRecord({ status: 'SUCCEEDED' }));
+      codingAgentService.execute.mockResolvedValue(
+        buildAgentJobRecord({ status: 'SUCCEEDED' }),
+      );
       // Simulate a DB/bug failure specifically while finalizeExecution
       // records the already-real outcome (its first write marks the
       // TaskExecution AGENT_COMPLETED) — every earlier taskExecution.update
@@ -651,7 +826,9 @@ describe('TaskExecutionService', () => {
         return buildExecutionRow(args?.data ?? {});
       });
 
-      await expect(service.execute('exec-1', context)).rejects.toThrow('DB write failed');
+      await expect(service.execute('exec-1', context)).rejects.toThrow(
+        'DB write failed',
+      );
 
       // Crucially: the Task must never be silently rolled back to READY —
       // that would mislabel a run where the agent actually succeeded.
@@ -663,7 +840,10 @@ describe('TaskExecutionService', () => {
     it('never rejects even when the provider throws (pre-agent failure, per the CodingAgentProvider contract)', async () => {
       setupExecuteHappyPathMocks();
       codingAgentService.execute.mockRejectedValue(
-        new CodingAgentError({ code: CodingAgentErrorCode.WORKSPACE_DIRTY, message: 'dirty' }),
+        new CodingAgentError({
+          code: CodingAgentErrorCode.WORKSPACE_DIRTY,
+          message: 'dirty',
+        }),
       );
 
       await expect(service.execute('exec-1', context)).resolves.toBeDefined();

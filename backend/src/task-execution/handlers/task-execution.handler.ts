@@ -23,7 +23,9 @@ export interface TaskExecutionJobPayload {
 // WorkspacePrepareJobHandler and CodingAgentExecutionJobHandler.
 @Injectable()
 export class TaskExecutionJobHandler
-  implements JobHandler<TaskExecutionJobPayload, TaskExecutionRecord>, OnModuleInit
+  implements
+    JobHandler<TaskExecutionJobPayload, TaskExecutionRecord>,
+    OnModuleInit
 {
   readonly type = JobType.TASK_EXECUTION;
 

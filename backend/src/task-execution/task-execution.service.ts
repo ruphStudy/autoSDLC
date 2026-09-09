@@ -234,7 +234,10 @@ export class TaskExecutionService {
         // Atomic claim: only one concurrent run() call for this Task can
         // ever see count === 1 here.
         const claim = await tx.task.updateMany({
-          where: { id: taskId, status: { in: [TaskStatus.PENDING, TaskStatus.READY] } },
+          where: {
+            id: taskId,
+            status: { in: [TaskStatus.PENDING, TaskStatus.READY] },
+          },
           data: { status: TaskStatus.RUNNING },
         });
         if (claim.count === 0) {
@@ -293,7 +296,11 @@ export class TaskExecutionService {
         userId,
         // IDs only — never the instruction text, source code, or
         // workspace path (item 87).
-        payload: { taskExecutionId: execution.id, taskId, projectId: project.id },
+        payload: {
+          taskExecutionId: execution.id,
+          taskId,
+          projectId: project.id,
+        },
         maxAttempts: 1,
       });
       const updated = await this.prisma.taskExecution.update({
@@ -345,7 +352,6 @@ export class TaskExecutionService {
     const execution = await this.prisma.taskExecution.findUniqueOrThrow({
       where: { id: taskExecutionId },
     });
-    const { projectId, taskId } = execution;
     const startedAt = new Date();
 
     await this.prisma.taskExecution.update({
@@ -355,10 +361,7 @@ export class TaskExecutionService {
 
     let agentJobRecord: AgentJobRecord;
     try {
-      agentJobRecord = await this.runPreAgentPhase(
-        execution,
-        context,
-      );
+      agentJobRecord = await this.runPreAgentPhase(execution, context);
     } catch (error) {
       // Per the CodingAgentProvider contract, executeTask only ever
       // rejects (and therefore CodingAgentService.execute only ever
@@ -417,9 +420,8 @@ export class TaskExecutionService {
       });
     }
 
-    const workspacePath = await this.assertWorkspaceReadyCleanAndOnBranch(
-      projectId,
-    );
+    const workspacePath =
+      await this.assertWorkspaceReadyCleanAndOnBranch(projectId);
 
     const repositoryStartSha = await this.git.getHeadCommitSha(workspacePath);
     await this.prisma.taskExecution.update({
@@ -481,7 +483,8 @@ export class TaskExecutionService {
       if (!status.clean) {
         const diffResult = await this.git.getDiff(workspacePath);
         gitDiffTruncated =
-          diffResult.truncated || diffResult.diff.length > this.config.maxDiffChars;
+          diffResult.truncated ||
+          diffResult.diff.length > this.config.maxDiffChars;
         gitDiff = diffResult.diff.slice(0, this.config.maxDiffChars);
       }
     } catch (error) {
@@ -508,7 +511,7 @@ export class TaskExecutionService {
       // safely return to its prior status.
       executionStatus = TaskExecutionStatus.CANCELLED;
       taskStatus = clean
-        ? execution.priorTaskStatus ?? TaskStatus.READY
+        ? (execution.priorTaskStatus ?? TaskStatus.READY)
         : TaskStatus.FAILED;
     }
 
@@ -585,9 +588,10 @@ export class TaskExecutionService {
     return toRecord(refreshed);
   }
 
-  private normalizeError(
-    error: unknown,
-  ): { code: TaskExecutionErrorCode; message: string } {
+  private normalizeError(error: unknown): {
+    code: TaskExecutionErrorCode;
+    message: string;
+  } {
     if (error instanceof TaskExecutionError) {
       return { code: error.code, message: error.message };
     }
@@ -762,9 +766,7 @@ export class TaskExecutionService {
 
     if (instruction.repositoryHeadSha !== currentHeadSha) {
       instruction =
-        await this.taskInstructionService.getOrGenerateFreshInstruction(
-          taskId,
-        );
+        await this.taskInstructionService.getOrGenerateFreshInstruction(taskId);
       currentHeadSha = await this.git.getHeadCommitSha(workspacePath);
       if (instruction.repositoryHeadSha !== currentHeadSha) {
         throw new TaskExecutionError({

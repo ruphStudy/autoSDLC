@@ -4,7 +4,10 @@ import {
   InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
-import { TaskExecutionError, TaskExecutionErrorCode } from './task-execution.error';
+import {
+  TaskExecutionError,
+  TaskExecutionErrorCode,
+} from './task-execution.error';
 
 export function mapTaskExecutionErrorToHttpException(
   error: TaskExecutionError,

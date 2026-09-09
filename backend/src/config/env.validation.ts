@@ -92,4 +92,16 @@ export const envValidationSchema = Joi.object({
     .integer()
     .min(1000)
     .default(200000),
+
+  // Deterministic Validation Engine (Sprint 13) — bounds on each validation
+  // command's execution. See TaskValidationConfigService.
+  VALIDATION_COMMAND_TIMEOUT_MS: Joi.number()
+    .integer()
+    .min(1000)
+    .max(3600000)
+    .default(300000),
+  VALIDATION_MAX_OUTPUT_BYTES: Joi.number()
+    .integer()
+    .min(1024)
+    .default(1048576),
 });
