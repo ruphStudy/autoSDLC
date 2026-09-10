@@ -31,6 +31,13 @@ export interface TaskPipelineEntry {
   commitSha: string | null;
 }
 
+export interface SprintAcceptanceSummary {
+  status: string;
+  recommendation: string | null;
+  stale: boolean;
+  latestVersion: number | null;
+}
+
 export interface SprintProgressSummary {
   sprintId: string;
   number: number;
@@ -45,6 +52,7 @@ export interface SprintProgressSummary {
   blockedTasks: number;
   remainingTasks: number;
   progressPercent: number;
+  acceptance: SprintAcceptanceSummary | null;
 }
 
 export interface ActiveSprintExecutionSummary {

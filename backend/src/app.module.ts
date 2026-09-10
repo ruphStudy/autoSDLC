@@ -18,6 +18,7 @@ import { TaskExecutionModule } from './task-execution/task-execution.module';
 import { TaskValidationModule } from './task-validation/task-validation.module';
 import { SprintExecutionModule } from './sprint-execution/sprint-execution.module';
 import { ExecutionMonitorModule } from './execution-monitor/execution-monitor.module';
+import { SprintAcceptanceModule } from './sprint-acceptance/sprint-acceptance.module';
 import { envValidationSchema } from './config/env.validation';
 
 @Module({
@@ -42,6 +43,7 @@ import { envValidationSchema } from './config/env.validation';
     TaskValidationModule,
     SprintExecutionModule,
     ExecutionMonitorModule,
+    SprintAcceptanceModule,
   ],
   controllers: [AppController],
   providers: [AppService],

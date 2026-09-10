@@ -78,6 +78,7 @@ describe('SprintExecutionService', () => {
   let jobService: any;
   let taskExecutionService: any;
   let taskValidationService: any;
+  let sprintAcceptanceService: any;
   let context: any;
   let service: SprintExecutionService;
 
@@ -136,6 +137,11 @@ describe('SprintExecutionService', () => {
       beginForOrchestrator: jest.fn(),
       execute: jest.fn(),
     };
+    sprintAcceptanceService = {
+      getGateStatus: jest
+        .fn()
+        .mockResolvedValue({ accepted: true, status: 'ACCEPTED', version: 1 }),
+    };
     context = {
       reportProgress: jest.fn().mockResolvedValue(undefined),
       isCancellationRequested: jest.fn().mockResolvedValue(false),
@@ -151,6 +157,7 @@ describe('SprintExecutionService', () => {
       jobService,
       taskExecutionService,
       taskValidationService,
+      sprintAcceptanceService,
     );
   });
 
@@ -257,6 +264,59 @@ describe('SprintExecutionService', () => {
       expect(result.reasons).toContain(
         SprintExecutionErrorCode.SPRINT_DEPENDENCY_NOT_PASSED,
       );
+    });
+
+    // Sprint 16's dependency-acceptance gate (item 58/59/89) — a prerequisite
+    // Sprint that mechanically PASSED but was not formally ACCEPTED still
+    // blocks the dependent Sprint from starting.
+    it('flags a Sprint dependency that PASSED but was not yet ACCEPTED', async () => {
+      setupEligibleMocks();
+      prisma.sprint.findFirst.mockResolvedValue(
+        buildSprint({
+          dependencies: [
+            { dependsOnSprint: { id: 'sprint-0', status: 'PASSED' } },
+          ],
+        }),
+      );
+      sprintAcceptanceService.getGateStatus.mockResolvedValue({
+        accepted: false,
+        status: 'READY_FOR_DECISION',
+        version: 1,
+      });
+      const result = await service.getEligibility(
+        'user-1',
+        'project-1',
+        'sprint-1',
+      );
+      expect(result.reasons).toContain(
+        SprintExecutionErrorCode.SPRINT_DEPENDENCY_NOT_ACCEPTED,
+      );
+      expect(sprintAcceptanceService.getGateStatus).toHaveBeenCalledWith(
+        'sprint-0',
+      );
+    });
+
+    it('is runnable once the prerequisite Sprint dependency is both PASSED and ACCEPTED', async () => {
+      setupEligibleMocks();
+      prisma.sprint.findFirst.mockResolvedValue(
+        buildSprint({
+          dependencies: [
+            { dependsOnSprint: { id: 'sprint-0', status: 'PASSED' } },
+          ],
+        }),
+      );
+      sprintAcceptanceService.getGateStatus.mockResolvedValue({
+        accepted: true,
+        status: 'ACCEPTED',
+        version: 1,
+      });
+      const result = await service.getEligibility(
+        'user-1',
+        'project-1',
+        'sprint-1',
+      );
+      expect(result.runnable).toBe(true);
+      expect(result.reasons).toEqual([]);
     });
 
     it('flags this Sprint already having an active execution', async () => {

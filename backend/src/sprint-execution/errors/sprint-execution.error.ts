@@ -14,6 +14,10 @@ export enum SprintExecutionErrorCode {
   SPRINT_ALREADY_ACTIVE = 'SPRINT_ALREADY_ACTIVE',
   OTHER_SPRINT_ACTIVE = 'OTHER_SPRINT_ACTIVE',
   SPRINT_DEPENDENCY_NOT_PASSED = 'SPRINT_DEPENDENCY_NOT_PASSED',
+  // Sprint 16: a prerequisite Sprint mechanically PASSED but has not yet
+  // been formally ACCEPTED (Sprint Acceptance Review) — a distinct,
+  // actionable state from "hasn't finished running yet" (item 58/59).
+  SPRINT_DEPENDENCY_NOT_ACCEPTED = 'SPRINT_DEPENDENCY_NOT_ACCEPTED',
 
   WORKSPACE_NOT_READY = 'WORKSPACE_NOT_READY',
   WRONG_BRANCH = 'WRONG_BRANCH',

@@ -51,6 +51,16 @@ export interface TaskPipelineEntry {
   commitSha: string | null;
 }
 
+// Lightweight only (item 109) — status/recommendation/staleness/version
+// number, never the full findings/evidence on every dashboard poll. Fetch
+// the real Sprint 16 acceptance endpoints to expand.
+export interface SprintAcceptanceSummary {
+  status: string;
+  recommendation: string | null;
+  stale: boolean;
+  latestVersion: number | null;
+}
+
 export interface SprintProgressSummary {
   sprintId: string;
   number: number;
@@ -65,6 +75,7 @@ export interface SprintProgressSummary {
   blockedTasks: number;
   remainingTasks: number;
   progressPercent: number;
+  acceptance: SprintAcceptanceSummary | null;
 }
 
 // The Sprint currently (or most recently) being executed — "isLive" tells

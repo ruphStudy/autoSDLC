@@ -84,6 +84,7 @@ export function DevelopmentPage() {
           )}
 
           <SprintProgressCard
+            projectId={projectId}
             sprints={overview.sprintProgress}
             activeSprintId={overview.activeSprintExecution?.sprintId ?? null}
           />

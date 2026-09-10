@@ -35,6 +35,7 @@ export const JOB_TYPE_REQUIRES_DEVELOPMENT_APPROVAL: Record<JobType, boolean> =
     [JobType.TASK_EXECUTION]: true,
     [JobType.TASK_VALIDATION]: true,
     [JobType.SPRINT_EXECUTION]: true,
+    [JobType.SPRINT_ACCEPTANCE_REVIEW]: true,
   };
 
 // Only PROJECT_PREPARATION and WORKSPACE_PREPARE are reachable through the

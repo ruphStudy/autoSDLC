@@ -21,6 +21,7 @@ import { JobService } from '../jobs/job.service';
 import { JobExecutionContext } from '../jobs/types/job.types';
 import { TaskExecutionService } from '../task-execution/task-execution.service';
 import { TaskValidationService } from '../task-validation/task-validation.service';
+import { SprintAcceptanceService } from '../sprint-acceptance/sprint-acceptance.service';
 import {
   SprintExecutionError,
   SprintExecutionErrorCode,
@@ -96,6 +97,7 @@ export class SprintExecutionService {
     private readonly jobService: JobService,
     private readonly taskExecutionService: TaskExecutionService,
     private readonly taskValidationService: TaskValidationService,
+    private readonly sprintAcceptanceService: SprintAcceptanceService,
   ) {}
 
   // ---- eligibility ---------------------------------------------------
@@ -125,7 +127,7 @@ export class SprintExecutionService {
       where: { id: sprintId, sprintPlan: { projectId: project.id } },
       include: {
         dependencies: {
-          include: { dependsOnSprint: { select: { status: true } } },
+          include: { dependsOnSprint: { select: { id: true, status: true } } },
         },
       },
     });
@@ -172,6 +174,24 @@ export class SprintExecutionService {
     );
     if (hasUnmetSprintDependency) {
       reasons.push(SprintExecutionErrorCode.SPRINT_DEPENDENCY_NOT_PASSED);
+    }
+
+    // A dependent Sprint may not start until every prerequisite Sprint is
+    // both mechanically PASSED (checked above) AND formally ACCEPTED via
+    // Sprint 16's own delivery-acceptance gate (item 58/59) — reuses the
+    // existing SprintAcceptanceService.getGateStatus() reusable helper
+    // rather than re-deriving acceptance rules here (item 59 explicitly
+    // warns against duplicating acceptance logic in the orchestrator). A
+    // Sprint with no dependencies is unaffected (item 60).
+    if (!hasUnmetSprintDependency && sprint.dependencies.length > 0) {
+      const gateStatuses = await Promise.all(
+        sprint.dependencies.map((d) =>
+          this.sprintAcceptanceService.getGateStatus(d.dependsOnSprint.id),
+        ),
+      );
+      if (gateStatuses.some((g) => !g.accepted)) {
+        reasons.push(SprintExecutionErrorCode.SPRINT_DEPENDENCY_NOT_ACCEPTED);
+      }
     }
 
     const activeForThisSprint = await this.prisma.sprintExecution.findFirst({

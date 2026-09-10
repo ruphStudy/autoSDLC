@@ -117,6 +117,7 @@ describe('ExecutionMonitorService', () => {
         findMany: jest.fn().mockResolvedValue([]),
       },
       projectWorkspace: { findUnique: jest.fn().mockResolvedValue(null) },
+      sprintAcceptance: { findMany: jest.fn().mockResolvedValue([]) },
     };
     projectsService = {
       findOneForUser: jest.fn().mockResolvedValue(buildProject()),
@@ -398,6 +399,74 @@ describe('ExecutionMonitorService', () => {
       runningTasks: 1,
       remainingTasks: 3,
       progressPercent: 40,
+    });
+  });
+
+  it('surfaces a lightweight acceptance summary per Sprint, flagging staleness against the live HEAD', async () => {
+    prisma.sprintPlan.findFirst.mockResolvedValue({ id: 'plan-1' });
+    prisma.sprint.findMany.mockResolvedValue([
+      buildSprint({ id: 'sprint-1', number: 1, status: 'PASSED' }),
+    ]);
+    prisma.sprintExecution.findFirst.mockResolvedValue(null);
+    prisma.task.groupBy.mockResolvedValue([
+      { sprintId: 'sprint-1', status: 'PASSED', _count: { _all: 2 } },
+    ]);
+    prisma.sprintAcceptance.findMany.mockResolvedValue([
+      {
+        sprintId: 'sprint-1',
+        status: 'READY_FOR_DECISION',
+        recommendation: 'ACCEPT',
+        repositoryHeadSha: 'old-sha',
+        version: 2,
+      },
+    ]);
+    prisma.projectWorkspace.findUnique.mockResolvedValue({ status: 'READY' });
+    workspaceService.getReadyWorkspacePath.mockResolvedValue(
+      '/workspaces/project-1',
+    );
+    git.getStatus.mockResolvedValue({ clean: true, files: [] });
+    git.getHeadCommitSha.mockResolvedValue('new-sha');
+    git.getCurrentBranch.mockResolvedValue('autodev/development');
+
+    const overview = await service.getOverview('user-1', 'project-1');
+    expect(overview.sprintProgress[0].acceptance).toEqual({
+      status: 'READY_FOR_DECISION',
+      recommendation: 'ACCEPT',
+      stale: true,
+      latestVersion: 2,
+    });
+  });
+
+  it('reports acceptance as not stale when the live HEAD still matches', async () => {
+    prisma.sprintPlan.findFirst.mockResolvedValue({ id: 'plan-1' });
+    prisma.sprint.findMany.mockResolvedValue([
+      buildSprint({ id: 'sprint-1', number: 1, status: 'PASSED' }),
+    ]);
+    prisma.sprintExecution.findFirst.mockResolvedValue(null);
+    prisma.task.groupBy.mockResolvedValue([]);
+    prisma.sprintAcceptance.findMany.mockResolvedValue([
+      {
+        sprintId: 'sprint-1',
+        status: 'ACCEPTED',
+        recommendation: 'ACCEPT',
+        repositoryHeadSha: 'same-sha',
+        version: 1,
+      },
+    ]);
+    prisma.projectWorkspace.findUnique.mockResolvedValue({ status: 'READY' });
+    workspaceService.getReadyWorkspacePath.mockResolvedValue(
+      '/workspaces/project-1',
+    );
+    git.getStatus.mockResolvedValue({ clean: true, files: [] });
+    git.getHeadCommitSha.mockResolvedValue('same-sha');
+    git.getCurrentBranch.mockResolvedValue('autodev/development');
+
+    const overview = await service.getOverview('user-1', 'project-1');
+    expect(overview.sprintProgress[0].acceptance).toEqual({
+      status: 'ACCEPTED',
+      recommendation: 'ACCEPT',
+      stale: false,
+      latestVersion: 1,
     });
   });
 

@@ -14,18 +14,19 @@ datasource db {
 }
 
 model User {
-  id               String     @id @default(uuid())
-  email            String     @unique
-  passwordHash     String
-  firstName        String?
-  lastName         String?
-  isActive         Boolean    @default(true)
-  refreshTokenHash String?
-  createdAt        DateTime   @default(now())
-  updatedAt        DateTime   @updatedAt
-  projects         Project[]
-  approvalsDecided Approval[]
-  jobs             Job[]
+  id                        String             @id @default(uuid())
+  email                     String             @unique
+  passwordHash              String
+  firstName                 String?
+  lastName                  String?
+  isActive                  Boolean            @default(true)
+  refreshTokenHash          String?
+  createdAt                 DateTime           @default(now())
+  updatedAt                 DateTime           @updatedAt
+  projects                  Project[]
+  approvalsDecided          Approval[]
+  sprintAcceptancesReviewed SprintAcceptance[]
+  jobs                      Job[]
 
   @@map("users")
 }
@@ -123,6 +124,7 @@ enum JobType {
   TASK_EXECUTION
   TASK_VALIDATION
   SPRINT_EXECUTION
+  SPRINT_ACCEPTANCE_REVIEW
 }
 
 enum JobStatus {
@@ -151,30 +153,31 @@ enum JobEventType {
 // architecture, sprint planning, execution) hang their own models off this
 // via `projectId` rather than growing this table with their JSON output.
 model Project {
-  id               String            @id @default(uuid())
-  userId           String
-  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  name             String
-  description      String?
-  brief            String
-  preferredStack   String?
-  repositoryType   RepositoryType    @default(NEW)
-  repositoryUrl    String?
-  status           ProjectStatus     @default(DRAFT)
-  archivedAt       DateTime?
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
-  analyses         ProjectAnalysis[]
-  architectures    Architecture[]
-  sprintPlans      SprintPlan[]
-  approvals        Approval[]
-  jobs             Job[]
-  workspace        ProjectWorkspace?
+  id                 String              @id @default(uuid())
+  userId             String
+  user               User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name               String
+  description        String?
+  brief              String
+  preferredStack     String?
+  repositoryType     RepositoryType      @default(NEW)
+  repositoryUrl      String?
+  status             ProjectStatus       @default(DRAFT)
+  archivedAt         DateTime?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  analyses           ProjectAnalysis[]
+  architectures      Architecture[]
+  sprintPlans        SprintPlan[]
+  approvals          Approval[]
+  jobs               Job[]
+  workspace          ProjectWorkspace?
   agentJobs          AgentJob[]
   taskInstructions   TaskInstruction[]
   taskExecutions     TaskExecution[]
   validationAttempts ValidationAttempt[]
   sprintExecutions   SprintExecution[]
+  sprintAcceptances  SprintAcceptance[]
 
   @@index([userId, archivedAt])
   @@map("projects")
@@ -362,7 +365,8 @@ model Sprint {
   dependencies SprintDependency[] @relation("SprintDependencies")
   dependents   SprintDependency[] @relation("SprintDependents")
 
-  executions SprintExecution[]
+  executions  SprintExecution[]
+  acceptances SprintAcceptance[]
 
   @@unique([sprintPlanId, number])
   @@index([sprintPlanId, order])
@@ -412,8 +416,8 @@ model Task {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  dependencies TaskDependency[]  @relation("TaskDependencies")
-  dependents   TaskDependency[]  @relation("TaskDependents")
+  dependencies       TaskDependency[]    @relation("TaskDependencies")
+  dependents         TaskDependency[]    @relation("TaskDependents")
   agentJobs          AgentJob[]
   instructions       TaskInstruction[]
   executions         TaskExecution[]
@@ -1022,4 +1026,130 @@ model SprintExecution {
   @@index([sprintId])
   @@index([status])
   @@map("sprint_executions")
+}
+
+// Sprint 16's own lifecycle — deliberately never reuses SprintStatus or
+// SprintExecutionStatus (item 4): "PASSED"/"COMPLETED" answer "did the
+// mechanics finish"; this answers "did the delivered outcome actually meet
+// the Sprint's agreed scope", a distinct question with its own workflow.
+enum SprintAcceptanceStatus {
+  PENDING
+  REVIEWING
+  READY_FOR_DECISION
+  ACCEPTED
+  REJECTED
+  FAILED
+  CANCELLED
+}
+
+// The AI reviewer's own advisory opinion — always kept structurally
+// separate from `status` (item 116). Recommending ACCEPT never implies
+// `status` becomes ACCEPTED; only an explicit human decision does that.
+enum SprintAcceptanceRecommendation {
+  ACCEPT
+  ACCEPT_WITH_NOTES
+  NEEDS_ATTENTION
+  REJECT
+}
+
+// One versioned Sprint-delivery review — the quality gate between "the
+// Sprint's Tasks all mechanically PASSED" (Sprint 12-14) and "a human
+// agrees this Sprint actually delivered its agreed scope". Never mutates
+// Task/TaskExecution/ValidationAttempt/SprintExecution rows (item 37/95-98)
+// — purely an aggregation-and-decision record layered on top of them.
+// Append-only per version, exactly like TaskInstruction/ProjectAnalysis/
+// Architecture/SprintPlan: a re-review creates a new version, history
+// preserved (item 7/74/105).
+model SprintAcceptance {
+  id        String  @id @default(uuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sprintId  String
+  sprint    Sprint  @relation(fields: [sprintId], references: [id], onDelete: Cascade)
+
+  // Exact lineage (item 6) — never "the latest Sprint/Plan/Execution" at
+  // read time. sprintPlanId already comes from the pinned
+  // SprintExecution.sprintPlanId, not independently "current".
+  sprintPlanId      String
+  sprintExecutionId String
+
+  version Int
+  status  SprintAcceptanceStatus @default(PENDING)
+
+  // Whether the deterministic hard gate (item 32) passed when this version
+  // was generated. Always true for any version that reached past PENDING —
+  // eligibility is re-checked at generation time, not inferred later.
+  deterministicPassed Boolean @default(true)
+
+  // Always present the moment evidence is built, independent of whether AI
+  // review ever succeeds (item 35/36/115) — a plain-language system summary
+  // with zero AI involvement, e.g. "5/5 Tasks passed, 21/21 required checks
+  // passed, 5 local commits, 4 requirements covered, workspace clean at
+  // abc1234".
+  deterministicSummary String?
+
+  // Bounded structured evidence (items 10-23) — never raw stdout/logs/full
+  // diffs/full source. See SprintAcceptanceEvidence type.
+  requirementCoverage Json?
+  validationSummary   Json?
+  commitSummary       Json?
+  riskSummary         Json?
+  changedFiles        Json?
+
+  // Exact repository state this review was generated against (item 22/48) —
+  // must equal SprintExecution.repositoryEndSha at generation time, and is
+  // re-checked live before an Accept/Reject decision (item 50/52).
+  repositoryHeadSha String?
+  // SHA-256 over the canonical deterministic evidence object (item 49) —
+  // proves a later Accept/Reject still corresponds to the exact evidence
+  // shown, without needing to recompute+diff the whole object.
+  evidenceHash      String?
+
+  // ---- independent AI review (nullable — may never have run) -----------
+
+  // 'COMPLETED' | 'UNAVAILABLE' | 'FAILED' — kept as a separate field from
+  // `status` so "deterministic evidence exists but AI never weighed in" is
+  // always distinguishable from "AI reviewed and flagged concerns" (item
+  // 35/36/73).
+  aiReviewStatus         String?
+  aiSummary              String?
+  objectiveAssessment    Json?
+  architectureAssessment Json?
+  riskAssessment         Json?
+  findings               Json?
+  recommendation         SprintAcceptanceRecommendation?
+
+  promptName        String?
+  promptVersion     String?
+  provider          String?
+  model             String?
+  inputTokens       Int?
+  outputTokens      Int?
+  totalTokens       Int?
+  latencyMs         Int?
+  attempts          Int?
+  providerRequestId String?
+
+  errorCode    String?
+  errorMessage String?
+
+  // ---- human decision (item 23/54/55/105/106 — immutable once set) -----
+
+  reviewedByUserId String?
+  reviewedByUser   User?     @relation(fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+  reviewedAt       DateTime?
+  rejectionReason  String?
+  reviewerNotes    String?
+
+  backgroundJobId String? @unique
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([sprintId, version])
+  @@index([projectId, createdAt])
+  @@index([sprintId])
+  @@index([sprintExecutionId])
+  @@index([status])
+  @@map("sprint_acceptances")
 }

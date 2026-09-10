@@ -142,7 +142,10 @@ export class ExecutionMonitorService {
       }),
     ]);
 
-    const sprintProgress = await this.buildSprintProgress(sprints);
+    const sprintProgress = await this.buildSprintProgress(
+      sprints,
+      workspace.headCommitSha,
+    );
     const hasActiveExecution = latestExecution
       ? ACTIVE_SPRINT_EXECUTION_STATUSES.includes(latestExecution.status)
       : false;
@@ -380,6 +383,7 @@ export class ExecutionMonitorService {
 
   private async buildSprintProgress(
     sprints: Pick<Sprint, 'id' | 'number' | 'title' | 'objective' | 'status'>[],
+    liveHeadSha: string | null,
   ): Promise<SprintProgressSummary[]> {
     if (sprints.length === 0) return [];
     const sprintIds = sprints.map((s) => s.id);
@@ -388,6 +392,30 @@ export class ExecutionMonitorService {
       where: { sprintId: { in: sprintIds } },
       _count: { _all: true },
     });
+
+    // Latest SprintAcceptance per Sprint, in one batched query (item
+    // 109/122) — lightweight only: status/recommendation/staleness/version,
+    // never the full findings/evidence on every dashboard poll.
+    const allAcceptances = await this.prisma.sprintAcceptance.findMany({
+      where: { sprintId: { in: sprintIds } },
+      orderBy: { version: 'desc' },
+      select: {
+        sprintId: true,
+        status: true,
+        recommendation: true,
+        repositoryHeadSha: true,
+        version: true,
+      },
+    });
+    const latestAcceptanceBySprintId = new Map<
+      string,
+      (typeof allAcceptances)[number]
+    >();
+    for (const acceptance of allAcceptances) {
+      if (!latestAcceptanceBySprintId.has(acceptance.sprintId)) {
+        latestAcceptanceBySprintId.set(acceptance.sprintId, acceptance);
+      }
+    }
 
     const countsBySprintId = new Map<string, Record<TaskStatus, number>>();
     for (const sprint of sprints) {
@@ -410,6 +438,7 @@ export class ExecutionMonitorService {
       const counts = countsBySprintId.get(sprint.id)!;
       const totalTasks = Object.values(counts).reduce((a, b) => a + b, 0);
       const remainingTasks = totalTasks - counts.PASSED;
+      const acceptance = latestAcceptanceBySprintId.get(sprint.id);
       return {
         sprintId: sprint.id,
         number: sprint.number,
@@ -425,6 +454,16 @@ export class ExecutionMonitorService {
         remainingTasks,
         progressPercent:
           totalTasks > 0 ? Math.round((counts.PASSED / totalTasks) * 100) : 0,
+        acceptance: acceptance
+          ? {
+              status: acceptance.status,
+              recommendation: acceptance.recommendation,
+              stale:
+                acceptance.repositoryHeadSha !== null &&
+                acceptance.repositoryHeadSha !== liveHeadSha,
+              latestVersion: acceptance.version,
+            }
+          : null,
       };
     });
   }
