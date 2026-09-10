@@ -6,7 +6,13 @@ import {
 } from '../approval/errors/approval.error';
 
 function buildProject(overrides: Partial<Record<string, unknown>> = {}) {
-  return { id: 'project-1', userId: 'user-1', archivedAt: null, ...overrides };
+  return {
+    id: 'project-1',
+    userId: 'user-1',
+    archivedAt: null,
+    status: 'DEVELOPING',
+    ...overrides,
+  };
 }
 
 function buildSprint(overrides: Partial<Record<string, unknown>> = {}) {
@@ -200,6 +206,21 @@ describe('SprintExecutionService', () => {
       );
       expect(result.reasons).toContain(
         SprintExecutionErrorCode.PROJECT_ARCHIVED,
+      );
+    });
+
+    it('flags a Project that has already been completed', async () => {
+      setupEligibleMocks();
+      projectsService.findOneForUser.mockResolvedValue(
+        buildProject({ status: 'COMPLETED' }),
+      );
+      const result = await service.getEligibility(
+        'user-1',
+        'project-1',
+        'sprint-1',
+      );
+      expect(result.reasons).toContain(
+        SprintExecutionErrorCode.PROJECT_COMPLETED,
       );
     });
 

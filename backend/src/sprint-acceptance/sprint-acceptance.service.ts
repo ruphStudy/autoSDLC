@@ -3,6 +3,7 @@ import {
   JobType,
   Prisma,
   Project,
+  ProjectStatus,
   SprintAcceptance,
   SprintAcceptanceStatus,
   SprintStatus,
@@ -204,6 +205,10 @@ export class SprintAcceptanceService {
 
     if (project.archivedAt) {
       reasons.push(SprintAcceptanceErrorCode.PROJECT_ARCHIVED);
+    }
+
+    if (project.status === ProjectStatus.COMPLETED) {
+      reasons.push(SprintAcceptanceErrorCode.PROJECT_COMPLETED);
     }
 
     const currentPlan = await this.prisma.sprintPlan.findFirst({
@@ -862,6 +867,15 @@ export class SprintAcceptanceService {
         new SprintAcceptanceError({
           code: SprintAcceptanceErrorCode.PROJECT_ARCHIVED,
           message: 'This project is archived. Restore it first.',
+        }),
+      );
+    }
+    if (project.status === ProjectStatus.COMPLETED) {
+      throw mapSprintAcceptanceErrorToHttpException(
+        new SprintAcceptanceError({
+          code: SprintAcceptanceErrorCode.PROJECT_COMPLETED,
+          message:
+            'This project has already been completed and delivered. No further Sprint Acceptance decisions may be made.',
         }),
       );
     }

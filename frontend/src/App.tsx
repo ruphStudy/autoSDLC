@@ -19,6 +19,7 @@ import { EditSprintPlanPage } from './pages/EditSprintPlanPage';
 import { SprintPlanVersionPage } from './pages/SprintPlanVersionPage';
 import { DevelopmentPage } from './pages/DevelopmentPage';
 import { SprintReviewPage } from './pages/SprintReviewPage';
+import { ProjectDeliveryPage } from './pages/ProjectDeliveryPage';
 
 export function App() {
   return (
@@ -58,6 +59,7 @@ export function App() {
         />
         <Route path="projects/:id/development" element={<DevelopmentPage />} />
         <Route path="projects/:id/sprints/:sprintId/review" element={<SprintReviewPage />} />
+        <Route path="projects/:id/delivery" element={<ProjectDeliveryPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

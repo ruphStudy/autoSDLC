@@ -219,6 +219,23 @@ describe('TaskExecutionService', () => {
       expect(result.reasons).toContain(TaskExecutionErrorCode.PROJECT_ARCHIVED);
     });
 
+    it('flags a Project that has already been completed', async () => {
+      setupEligibleMocks();
+      projectsService.findOneForUser.mockResolvedValue(
+        buildProject({ status: ProjectStatus.COMPLETED }),
+      );
+
+      const result = await service.getEligibility(
+        'user-1',
+        'project-1',
+        'task-1',
+      );
+
+      expect(result.reasons).toContain(
+        TaskExecutionErrorCode.PROJECT_COMPLETED,
+      );
+    });
+
     it('flags a Task belonging to a superseded Sprint Plan', async () => {
       setupEligibleMocks();
       prisma.sprintPlan.findFirst.mockResolvedValue({ id: 'plan-2' });

@@ -69,9 +69,26 @@ export function DevelopmentPage() {
           <p>Your approved Sprint Plan is ready for development. Prepare the workspace to begin.</p>
           <Link to={`/projects/${projectId}`}>Go to Workspace</Link>
         </section>
+      ) : overview.projectStatus === 'COMPLETED' ? (
+        <section className="workspace-panel">
+          <h3>Project Completed</h3>
+          <p>This project has been completed and delivered.</p>
+          <Link to={`/projects/${projectId}/delivery`}>View Delivery</Link>
+        </section>
       ) : (
         <>
           <ExecutionHeader projectId={projectId} overview={overview} onChanged={refresh} />
+
+          {!overview.hasActiveExecution &&
+            overview.sprintProgress.length > 0 &&
+            overview.sprintProgress.every(
+              (s) => s.status === 'PASSED' && s.acceptance?.status === 'ACCEPTED',
+            ) && (
+              <section className="analysis-empty-section">
+                Every Sprint has passed and been accepted. This project is ready for completion.{' '}
+                <Link to={`/projects/${projectId}/delivery`}>Review and complete</Link>
+              </section>
+            )}
 
           {!overview.hasActiveExecution && !overview.activeSprintExecution && (
             <section className="workspace-panel">

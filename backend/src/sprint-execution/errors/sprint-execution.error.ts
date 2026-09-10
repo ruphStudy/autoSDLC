@@ -7,6 +7,10 @@ export enum SprintExecutionErrorCode {
   EXECUTION_NOT_FOUND = 'EXECUTION_NOT_FOUND',
 
   PROJECT_ARCHIVED = 'PROJECT_ARCHIVED',
+  // Sprint 17: the Project has already been finalized via ProjectDelivery
+  // (Project.status === COMPLETED) — the approved development lifecycle is
+  // closed and no further Sprint execution may occur (item 88).
+  PROJECT_COMPLETED = 'PROJECT_COMPLETED',
   DEVELOPMENT_NOT_APPROVED = 'DEVELOPMENT_NOT_APPROVED',
   SPRINT_NOT_IN_CURRENT_PLAN = 'SPRINT_NOT_IN_CURRENT_PLAN',
 

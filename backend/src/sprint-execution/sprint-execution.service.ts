@@ -2,6 +2,7 @@ import { HttpException, Injectable, Logger } from '@nestjs/common';
 import {
   JobType,
   Project,
+  ProjectStatus,
   SprintExecution,
   SprintExecutionStatus,
   SprintStatus,
@@ -144,6 +145,10 @@ export class SprintExecutionService {
 
     if (project.archivedAt) {
       reasons.push(SprintExecutionErrorCode.PROJECT_ARCHIVED);
+    }
+
+    if (project.status === ProjectStatus.COMPLETED) {
+      reasons.push(SprintExecutionErrorCode.PROJECT_COMPLETED);
     }
 
     const currentPlan = await this.prisma.sprintPlan.findFirst({

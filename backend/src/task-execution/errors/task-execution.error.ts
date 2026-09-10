@@ -10,6 +10,10 @@ export enum TaskExecutionErrorCode {
   EXECUTION_NOT_FOUND = 'EXECUTION_NOT_FOUND',
 
   PROJECT_ARCHIVED = 'PROJECT_ARCHIVED',
+  // Sprint 17: the Project has already been finalized via ProjectDelivery
+  // (Project.status === COMPLETED) — the approved development lifecycle is
+  // closed and no further Task execution may occur (item 87).
+  PROJECT_COMPLETED = 'PROJECT_COMPLETED',
   // Covers the whole Sprint 7 assertDevelopmentApproved gate (Analysis +
   // Architecture + Sprint Plan approved, and Start Development explicitly
   // approved) — that gate is a single all-or-nothing check, so there is no

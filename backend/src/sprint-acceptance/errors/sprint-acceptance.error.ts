@@ -5,6 +5,11 @@ export enum SprintAcceptanceErrorCode {
   SPRINT_NOT_FOUND = 'SPRINT_NOT_FOUND',
   ACCEPTANCE_NOT_FOUND = 'ACCEPTANCE_NOT_FOUND',
   PROJECT_ARCHIVED = 'PROJECT_ARCHIVED',
+  // Sprint 17: the Project has already been finalized via ProjectDelivery
+  // (Project.status === COMPLETED) — no new Sprint Acceptance review may be
+  // generated, and no pending review may be accepted/rejected, once the
+  // approved development lifecycle is closed (item 89).
+  PROJECT_COMPLETED = 'PROJECT_COMPLETED',
   PLAN_LINEAGE_MISMATCH = 'PLAN_LINEAGE_MISMATCH',
   SPRINT_NOT_PASSED = 'SPRINT_NOT_PASSED',
   SPRINT_EXECUTION_NOT_COMPLETED = 'SPRINT_EXECUTION_NOT_COMPLETED',

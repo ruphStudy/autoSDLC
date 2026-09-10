@@ -125,6 +125,10 @@ export class TaskExecutionService {
       reasons.push(TaskExecutionErrorCode.PROJECT_ARCHIVED);
     }
 
+    if (project.status === ProjectStatus.COMPLETED) {
+      reasons.push(TaskExecutionErrorCode.PROJECT_COMPLETED);
+    }
+
     const currentPlan = await this.prisma.sprintPlan.findFirst({
       where: { projectId: project.id },
       orderBy: { version: 'desc' },

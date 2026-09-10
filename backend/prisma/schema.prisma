@@ -27,6 +27,7 @@ model User {
   approvalsDecided          Approval[]
   sprintAcceptancesReviewed SprintAcceptance[]
   jobs                      Job[]
+  deliveriesFinalized       ProjectDelivery[]
 
   @@map("users")
 }
@@ -178,6 +179,12 @@ model Project {
   validationAttempts ValidationAttempt[]
   sprintExecutions   SprintExecution[]
   sprintAcceptances  SprintAcceptance[]
+  deliveries         ProjectDelivery[]
+
+  // Set exactly once, atomically alongside the ProjectDelivery row that
+  // finalized COMPLETED (Sprint 17) — never touched by any other status
+  // transition. Null for every Project that has not yet completed.
+  completedAt DateTime?
 
   @@index([userId, archivedAt])
   @@map("projects")
@@ -1152,4 +1159,80 @@ model SprintAcceptance {
   @@index([sprintExecutionId])
   @@index([status])
   @@map("sprint_acceptances")
+}
+
+// The immutable evidence of a whole Project's completion (Sprint 17) — the
+// delivery-level counterpart to SprintAcceptance's Sprint-level review. Unlike
+// SprintAcceptance there is deliberately no independent-AI-review half and no
+// intermediate PENDING/REVIEWING status: completion is a single synchronous,
+// deterministic, zero-AI operation (item 49) that either fully succeeds
+// (every required Sprint PASSED + ACCEPTED, every requirement covered, the
+// workspace clean at the resolved final SHA) or throws without persisting
+// anything — there is no partial/failed row to model. A row existing IS the
+// completion evidence; Project.status flips to COMPLETED atomically in the
+// same DB transaction that creates it (never via a background Job).
+// Versioned like every other artifact in this codebase for schema
+// consistency (and to leave room for a future explicit change-request/
+// reopen workflow, item 160), but under Sprint 17's own rules exactly one
+// version will ever exist per Project — re-calling complete() on an already
+// COMPLETED Project returns the existing row rather than creating a new one
+// (item 45).
+model ProjectDelivery {
+  id        String  @id @default(uuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  version Int
+
+  // The authoritative final Git state this delivery certifies (item 21/22):
+  // the repositoryEndSha of the COMPLETED SprintExecution with the latest
+  // completedAt among all required Sprints, re-verified live against the
+  // workspace HEAD immediately before finalizing (never a naive "last Sprint
+  // in array order" read).
+  repositoryFinalSha String
+  repositoryBranch   String?
+
+  // Bounded, deterministic evidence sections (never raw stdout/logs/full
+  // diffs/full source — mirrors SprintAcceptance's own evidence shape):
+  //  - requiredSprints: per-required-Sprint {sprintId, number, title,
+  //    sprintExecutionId, acceptanceVersion, completedAt}
+  //  - requirementCoverage: per-FR {requirementId, title, covered,
+  //    taskKeys[]}
+  //  - taskSummary: {totalTasks, passedTasks}
+  //  - validationSummary: aggregated required/optional pass/fail counts
+  //  - commitSummary: {totalCommits, firstCommitSha, lastCommitSha}
+  //  - usageSummary: AI token usage aggregated across every prior sprint's
+  //    generation calls (Analysis/Architecture/Plan/Instruction/Acceptance)
+  //    — read-only aggregation; Sprint 17 itself never calls a provider
+  //  - warnings: non-blocking advisory notes (e.g. stale/never-reviewed
+  //    optional evidence) that did not block completion
+  requiredSprints     Json
+  requirementCoverage Json
+  taskSummary         Json
+  validationSummary   Json
+  commitSummary       Json
+  usageSummary        Json
+  warnings            Json
+
+  // Deterministic, zero-AI plain-language summary (same spirit as
+  // SprintAcceptance.deterministicSummary) — e.g. "12 Sprints accepted, 47
+  // Tasks passed, 9/9 requirements covered, final commit abc1234 on branch
+  // main."
+  deliverySummary String
+
+  // SHA-256 over the canonical evidence object above — proves this exact
+  // manifest is what completion certified without needing to recompute and
+  // diff the whole JSON blob (same pattern as SprintAcceptance.evidenceHash).
+  deliveryEvidenceHash String
+
+  finalizedByUserId String
+  finalizedByUser   User     @relation(fields: [finalizedByUserId], references: [id], onDelete: Cascade)
+  finalizedAt       DateTime @default(now())
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([projectId, version])
+  @@index([projectId, createdAt])
+  @@map("project_deliveries")
 }

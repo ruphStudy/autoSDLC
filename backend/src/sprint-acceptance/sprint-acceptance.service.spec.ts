@@ -466,6 +466,15 @@ describe('SprintAcceptanceService', () => {
       ).rejects.toThrow();
     });
 
+    it('blocks generation for an already-completed project via eligibility', async () => {
+      projectsService.findOneForUser.mockResolvedValue(
+        buildProject({ status: 'COMPLETED' }),
+      );
+      await expect(
+        service.generate('user-1', 'project-1', 'sprint-1'),
+      ).rejects.toThrow();
+    });
+
     it('creates v2 on a second generate() once the first review is no longer active, preserving v1', async () => {
       await service.generate('user-1', 'project-1', 'sprint-1');
       // First review reached a terminal-ish state (no longer PENDING/REVIEWING).
@@ -650,6 +659,16 @@ describe('SprintAcceptanceService', () => {
       await generateAndComplete();
       projectsService.findOneForUser.mockResolvedValue(
         buildProject({ archivedAt: new Date() }),
+      );
+      await expect(
+        service.accept('user-1', 'project-1', 'sprint-1', {}),
+      ).rejects.toThrow();
+    });
+
+    it('blocks mutation on an already-completed project', async () => {
+      await generateAndComplete();
+      projectsService.findOneForUser.mockResolvedValue(
+        buildProject({ status: 'COMPLETED' }),
       );
       await expect(
         service.accept('user-1', 'project-1', 'sprint-1', {}),
