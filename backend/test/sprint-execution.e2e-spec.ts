@@ -407,6 +407,28 @@ describe('Sprint Orchestrator / autonomous multi-Task execution (e2e)', () => {
       .expect(404);
   });
 
+  // Sprint 18 item 54/108: a "historical plan drives execution" scenario
+  // turns out to be structurally unreachable in this codebase, not merely
+  // untested — SprintPlanningService.regenerate()'s own allowedEntry list
+  // (PLAN_READY/PLAN_APPROVED only) already refuses to create a superseding
+  // plan version once development has been approved, so there is never a
+  // point at which a "historical" plan and a runnable Sprint can coexist.
+  // TaskExecutionService/SprintExecutionService's own
+  // TASK_NOT_IN_CURRENT_PLAN/SPRINT_NOT_IN_CURRENT_PLAN checks (unit-tested
+  // in their own spec files) remain as defense in depth for this
+  // currently-unreachable case. This test asserts the actually-reachable
+  // guarantee instead: regeneration itself is blocked post-approval.
+  it('blocks regenerating the Sprint Plan once development has been approved', async () => {
+    const token = await registerUser('sprintx-plan-locked');
+    const { projectId } = await buildReadyProject(token);
+
+    const blocked = await request(app.getHttpServer())
+      .post(`/projects/${projectId}/sprint-plan/regenerate`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(409);
+    expect(blocked.body.message).toContain('DEVELOPMENT_APPROVED');
+  });
+
   describe('successful autonomous run against a real Git + npm fixture (two dependent Tasks)', () => {
     it('executes both Tasks strictly in dependency order, committing once per Task, and completes the Sprint', async () => {
       const token = await registerUser('sprintx-success');
@@ -613,6 +635,94 @@ describe('Sprint Orchestrator / autonomous multi-Task execution (e2e)', () => {
         .post(`/projects/${projectId}/sprints/${sprintId}/run`)
         .set('Authorization', `Bearer ${token}`)
         .expect(409);
+    });
+  });
+
+  // Sprint 18 item 47: pause takes effect only at a Task boundary — the
+  // in-flight Task must finish normally, the NEXT Task must not start, and
+  // resume must let the Sprint carry on to completion.
+  describe('pause and resume', () => {
+    it('finishes the in-flight Task, holds the next Task until resume, then completes the Sprint', async () => {
+      const token = await registerUser('sprintx-pause');
+      const { projectId, sprintId, taskAId, taskBId } =
+        await buildReadyProject(token);
+
+      generateStructuredOutput.mockImplementation(
+        async (req: { metadata?: Record<string, string> }) => {
+          const isTaskA = req.metadata?.taskId === taskAId;
+          return taskInstructionResult(
+            isTaskA ? TASK_A_EXPECTATIONS : TASK_B_EXPECTATIONS,
+            isTaskA ? 'Add file-a.txt' : 'Add file-b.txt',
+            [isTaskA ? 'file-a.txt exists.' : 'file-b.txt exists.'],
+          );
+        },
+      );
+      executeTask.mockImplementation(
+        async (req: CodingAgentExecutionRequest) => {
+          await ensureNpmProject(req.workspacePath, {
+            lint: 'node -e "process.exit(0)"',
+          });
+          if (req.taskId === taskAId) {
+            // Simulate a user clicking Pause while Task A is still running —
+            // the real pause HTTP endpoint, called mid-flight, exactly as a
+            // browser tab open on the Development dashboard would.
+            await request(app.getHttpServer())
+              .post(`/projects/${projectId}/sprints/${sprintId}/pause`)
+              .set('Authorization', `Bearer ${token}`)
+              .expect(200);
+            await fs.writeFile(
+              path.join(req.workspacePath, 'file-a.txt'),
+              'content',
+            );
+          } else {
+            await fs.writeFile(
+              path.join(req.workspacePath, 'file-b.txt'),
+              'content',
+            );
+          }
+          return agentSuccessResult();
+        },
+      );
+
+      await request(app.getHttpServer())
+        .post(`/projects/${projectId}/sprints/${sprintId}/run`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(202);
+      await worker.runOnce();
+
+      const afterPause = await request(app.getHttpServer())
+        .get(`/projects/${projectId}/sprints/${sprintId}/execution`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+      expect(afterPause.body.status).toBe('PAUSED');
+      expect(afterPause.body.passedTasks).toBe(1);
+
+      const planAfterPause = await request(app.getHttpServer())
+        .get(`/projects/${projectId}/sprint-plan`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+      const taskAAfterPause = planAfterPause.body.sprints[0].tasks.find(
+        (t: { id: string }) => t.id === taskAId,
+      );
+      const taskBAfterPause = planAfterPause.body.sprints[0].tasks.find(
+        (t: { id: string }) => t.id === taskBId,
+      );
+      expect(taskAAfterPause.status).toBe('PASSED');
+      expect(taskBAfterPause.status).not.toBe('PASSED');
+      expect(taskBAfterPause.status).not.toBe('RUNNING');
+
+      await request(app.getHttpServer())
+        .post(`/projects/${projectId}/sprints/${sprintId}/resume`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(202);
+      await worker.runOnce();
+
+      const afterResume = await request(app.getHttpServer())
+        .get(`/projects/${projectId}/sprints/${sprintId}/execution`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+      expect(afterResume.body.status).toBe('COMPLETED');
+      expect(afterResume.body.passedTasks).toBe(2);
     });
   });
 

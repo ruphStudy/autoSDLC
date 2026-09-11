@@ -1,6 +1,8 @@
 import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import * as request from 'supertest';
@@ -20,6 +22,8 @@ import { CodingAgentExecutionRequest } from '../src/coding-agent/contracts/codin
 import { CodingAgentExecutionResult } from '../src/coding-agent/contracts/coding-agent-result';
 
 jest.setTimeout(60000);
+
+const execFileAsync = promisify(execFile);
 
 function analysisResult() {
   return {
@@ -563,6 +567,57 @@ describe('Sprint Acceptance & Review (e2e)', () => {
       .expect(200);
     expect(history.body).toHaveLength(1);
     expect(history.body[0].status).toBe('ACCEPTED');
+  });
+
+  // Sprint 18 item 44: a review generated against one repository state must
+  // never be Accepted/Rejected once that state has moved — regardless of
+  // whether the move came through the orchestrator or (as here) some other
+  // real change to the workspace, e.g. a manual intervention.
+  it('blocks Accept once the repository moved after the review was generated (stale evidence)', async () => {
+    const token = await registerUser('acceptance-stale');
+    const { projectId, sprint1Id, workspacePath } =
+      await buildProjectWithSprint1Completed(token);
+
+    generateStructuredOutput.mockResolvedValue(acceptanceReviewResult());
+    await request(app.getHttpServer())
+      .post(`/projects/${projectId}/sprints/${sprint1Id}/acceptance/generate`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(202);
+    await worker.runOnce();
+
+    const beforeMove = await request(app.getHttpServer())
+      .get(`/projects/${projectId}/sprints/${sprint1Id}/acceptance`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+    expect(beforeMove.body.stale).toBe(false);
+
+    // A real commit made directly against the actual workspace, entirely
+    // outside the orchestrator — proves staleness detection reacts to any
+    // repository move, not just ones the app itself made.
+    await fs.writeFile(
+      path.join(workspacePath, 'out-of-band.txt'),
+      'unexpected change',
+    );
+    await execFileAsync('git', ['add', '.'], { cwd: workspacePath });
+    await execFileAsync(
+      'git',
+      ['commit', '-m', 'out-of-band change after review'],
+      { cwd: workspacePath },
+    );
+
+    const afterMove = await request(app.getHttpServer())
+      .get(`/projects/${projectId}/sprints/${sprint1Id}/acceptance`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+    expect(afterMove.body.stale).toBe(true);
+
+    const blocked = await request(app.getHttpServer())
+      .post(`/projects/${projectId}/sprints/${sprint1Id}/acceptance/accept`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(409);
+    expect(blocked.body.message).toContain(
+      'The Sprint state has changed since this review was generated',
+    );
   });
 
   it('rejects a Sprint with a persisted reason', async () => {

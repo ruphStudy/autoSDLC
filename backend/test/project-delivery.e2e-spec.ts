@@ -1,6 +1,8 @@
 import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import * as request from 'supertest';
@@ -21,6 +23,8 @@ import { CodingAgentExecutionRequest } from '../src/coding-agent/contracts/codin
 import { CodingAgentExecutionResult } from '../src/coding-agent/contracts/coding-agent-result';
 
 jest.setTimeout(60000);
+
+const execFileAsync = promisify(execFile);
 
 function analysisResult() {
   return {
@@ -567,10 +571,9 @@ describe('Project Completion & Delivery (e2e)', () => {
       .expect(409);
   });
 
-  it('completes a Project once every Sprint is PASSED and ACCEPTED, with the manifest\'s final SHA matching the real live workspace HEAD', async () => {
+  it("completes a Project once every Sprint is PASSED and ACCEPTED, with the manifest's final SHA matching the real live workspace HEAD", async () => {
     const token = await registerUser('delivery-complete');
-    const { projectId, workspacePath } =
-      await buildFullyAcceptedProject(token);
+    const { projectId, workspacePath } = await buildFullyAcceptedProject(token);
 
     const eligibility = await request(app.getHttpServer())
       .get(`/projects/${projectId}/completion-eligibility`)
@@ -642,8 +645,7 @@ describe('Project Completion & Delivery (e2e)', () => {
 
   it('blocks completion when the live workspace is dirty', async () => {
     const token = await registerUser('delivery-dirty');
-    const { projectId, workspacePath } =
-      await buildFullyAcceptedProject(token);
+    const { projectId, workspacePath } = await buildFullyAcceptedProject(token);
 
     await fs.writeFile(
       path.join(workspacePath, 'untracked-leftover.txt'),
@@ -665,10 +667,51 @@ describe('Project Completion & Delivery (e2e)', () => {
     await fs.rm(path.join(workspacePath, 'untracked-leftover.txt'));
   });
 
+  // Sprint 18 item 45: eligibility passing once is not a permanent
+  // guarantee — if the repository moves afterward (here, a real commit made
+  // directly against the workspace, outside the orchestrator entirely),
+  // finalization must reject the now-stale state rather than trusting the
+  // earlier eligibility snapshot.
+  it('rejects completion once the repository moved after eligibility was last confirmed', async () => {
+    const token = await registerUser('delivery-stale');
+    const { projectId, workspacePath } = await buildFullyAcceptedProject(token);
+
+    const eligibility = await request(app.getHttpServer())
+      .get(`/projects/${projectId}/completion-eligibility`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+    expect(eligibility.body.eligible).toBe(true);
+
+    await fs.writeFile(
+      path.join(workspacePath, 'out-of-band.txt'),
+      'unexpected change',
+    );
+    await execFileAsync('git', ['add', '.'], { cwd: workspacePath });
+    await execFileAsync(
+      'git',
+      ['commit', '-m', 'out-of-band change after eligibility check'],
+      { cwd: workspacePath },
+    );
+
+    const blocked = await request(app.getHttpServer())
+      .post(`/projects/${projectId}/complete`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(409);
+    expect(blocked.body.message).toContain('FINAL_SHA_MISMATCH');
+
+    const projectRow = await prisma.project.findUniqueOrThrow({
+      where: { id: projectId },
+    });
+    expect(projectRow.status).not.toBe('COMPLETED');
+    const deliveries = await prisma.projectDelivery.findMany({
+      where: { projectId },
+    });
+    expect(deliveries).toHaveLength(0);
+  });
+
   it('blocks re-running a Sprint and generating a new Sprint Acceptance review once the Project is COMPLETED', async () => {
     const token = await registerUser('delivery-post-completion');
-    const { projectId, sprint1Id } =
-      await buildFullyAcceptedProject(token);
+    const { projectId, sprint1Id } = await buildFullyAcceptedProject(token);
 
     await request(app.getHttpServer())
       .post(`/projects/${projectId}/complete`)

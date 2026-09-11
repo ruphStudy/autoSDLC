@@ -15,6 +15,17 @@ describe('AppController (e2e)', () => {
     await app.init();
   });
 
+  // Never leaked before this fix: a full AppModule (its own PrismaClient
+  // connection pool) was created fresh in beforeEach with no matching
+  // afterEach — since this file sorts alphabetically first among all
+  // *.e2e-spec.ts files, that leaked pool sat open for the entire rest of
+  // a combined run, competing for scratch-Postgres connections against
+  // every subsequent file's own pool (see the Sprint 18 investigation into
+  // the long-documented combined-run hang).
+  afterEach(async () => {
+    await app.close();
+  });
+
   it('/ (GET)', () => {
     return request(app.getHttpServer())
       .get('/')
