@@ -516,6 +516,19 @@ describe('Project Completion & Delivery (e2e)', () => {
     expect(eligibility.body.reasons).toContain('NO_SPRINT_PLAN');
   });
 
+  // Regression: GET .../delivery on a Project with no ProjectDelivery yet
+  // must be an ordinary 404, never a 500 (caught by manual browser
+  // verification, not by any prior automated test).
+  it('returns 404 (never 500) from GET delivery when nothing has been delivered yet', async () => {
+    const token = await registerUser('delivery-not-found');
+    const projectId = await createProject(token);
+
+    await request(app.getHttpServer())
+      .get(`/projects/${projectId}/delivery`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(404);
+  });
+
   it('blocks completion until every required Sprint is both PASSED and ACCEPTED', async () => {
     const token = await registerUser('delivery-partial');
     const projectId = await createProject(token);

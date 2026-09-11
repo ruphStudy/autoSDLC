@@ -449,9 +449,11 @@ describe('ProjectDeliveryService', () => {
       expect(result.id).toBe('delivery-1');
     });
 
-    it('throws when the Project has no delivery yet', async () => {
+    it('throws a 404 (never a 500) when the Project has no delivery yet', async () => {
       prisma.projectDelivery.findFirst.mockResolvedValue(null);
-      await expect(service.getCurrent('user-1', 'project-1')).rejects.toThrow();
+      await expect(
+        service.getCurrent('user-1', 'project-1'),
+      ).rejects.toMatchObject({ status: 404 });
     });
   });
 });

@@ -49,6 +49,11 @@ export enum ProjectDeliveryErrorCode {
   // before the point of no return" pattern as Sprint 11/16's own re-checks.
   PROJECT_DELIVERY_STATE_CHANGED = 'PROJECT_DELIVERY_STATE_CHANGED',
 
+  // GET .../delivery on a Project that has never been completed — an
+  // ordinary "not found" (the client should show "not delivered yet"), not
+  // a server error.
+  DELIVERY_NOT_FOUND = 'DELIVERY_NOT_FOUND',
+
   UNKNOWN_ERROR = 'UNKNOWN_ERROR',
 }
 

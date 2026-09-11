@@ -401,7 +401,7 @@ export class ProjectDeliveryService {
     if (!delivery) {
       throw mapProjectDeliveryErrorToHttpException(
         new ProjectDeliveryError({
-          code: ProjectDeliveryErrorCode.UNKNOWN_ERROR,
+          code: ProjectDeliveryErrorCode.DELIVERY_NOT_FOUND,
           message: 'This project has no delivery record yet.',
         }),
       );

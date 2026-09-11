@@ -2,6 +2,7 @@ import {
   ConflictException,
   HttpException,
   InternalServerErrorException,
+  NotFoundException,
 } from '@nestjs/common';
 import {
   ProjectDeliveryError,
@@ -14,6 +15,9 @@ export function mapProjectDeliveryErrorToHttpException(
   const body = { code: error.code, message: error.message };
 
   switch (error.code) {
+    case ProjectDeliveryErrorCode.DELIVERY_NOT_FOUND:
+      return new NotFoundException(body);
+
     case ProjectDeliveryErrorCode.UNKNOWN_ERROR:
       return new InternalServerErrorException(body);
 
